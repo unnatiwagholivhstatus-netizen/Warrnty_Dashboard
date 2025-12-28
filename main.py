@@ -52,10 +52,11 @@ WARRANTY_DATA = {
 
 def find_data_file(filename):
     """Find data file in multiple possible locations, including variants with ' - Copy' suffix"""
+    # Check current directory FIRST (where files are cloned in repo)
     possible_paths = [
-        os.path.join(DATA_DIR, filename),
         filename,
         f"./{filename}",
+        os.path.join(DATA_DIR, filename),
         os.path.join(DATA_DIR, 'data', filename),
         os.path.join('data', filename),
     ]
@@ -65,9 +66,9 @@ def find_data_file(filename):
         name_without_ext = filename.replace('.xlsx', '')
         copy_variant = f"{name_without_ext} - Copy.xlsx"
         possible_paths.extend([
-            os.path.join(DATA_DIR, copy_variant),
             copy_variant,
             f"./{copy_variant}",
+            os.path.join(DATA_DIR, copy_variant),
             os.path.join(DATA_DIR, 'data', copy_variant),
             os.path.join('data', copy_variant),
         ])
@@ -77,7 +78,7 @@ def find_data_file(filename):
             print(f"  ✓ Found: {filename} at {path}")
             return path
     
-    print(f"  ✗ WARNING: {filename} not found in: {possible_paths}")
+    print(f"  ✗ WARNING: {filename} not found. Checked: {possible_paths}")
     return None
 
 def process_pr_approval():
@@ -2955,34 +2956,40 @@ print("=" * 100)
 
 # Copy files from current directory to /mnt/data if on Render
 if IS_RENDER:
-    print("\n📁 Setting up data directory on Render...")
+    print("\n📁 Copying files to /mnt/data on Render...")
     import shutil
     import glob
     
-    # Create /mnt/data directory if it doesn't exist
-    os.makedirs(DATA_DIR, exist_ok=True)
-    print(f"  ✓ Created data directory: {DATA_DIR}")
-    
-    # Copy Excel files
-    excel_files = glob.glob("*.xlsx")
-    for file in excel_files:
-        try:
-            dest = os.path.join(DATA_DIR, file)
-            shutil.copy2(file, dest)
-            print(f"  ✓ Copied: {file}")
-        except Exception as e:
-            print(f"  ✗ Could not copy {file}: {e}")
-    
-    # Copy Image folder if it exists
-    if os.path.exists("Image"):
-        try:
-            dest_image = os.path.join(DATA_DIR, "Image")
-            if os.path.exists(dest_image):
-                shutil.rmtree(dest_image)
-            shutil.copytree("Image", dest_image)
-            print(f"  ✓ Copied Image folder")
-        except Exception as e:
-            print(f"  ✗ Could not copy Image folder: {e}")
+    try:
+        # Copy Excel files
+        excel_files = glob.glob("*.xlsx")
+        if excel_files:
+            for file in excel_files:
+                try:
+                    dest = os.path.join(DATA_DIR, file)
+                    if not os.path.exists(dest):  # Only copy if doesn't exist
+                        shutil.copy2(file, dest)
+                        print(f"  ✓ Copied: {file}")
+                    else:
+                        print(f"  ✓ Already exists: {file}")
+                except Exception as e:
+                    print(f"  ⚠ Could not copy {file}: {e}")
+        else:
+            print(f"  ⚠ No xlsx files found to copy")
+        
+        # Copy Image folder if it exists
+        if os.path.exists("Image"):
+            try:
+                dest_image = os.path.join(DATA_DIR, "Image")
+                if not os.path.exists(dest_image):
+                    shutil.copytree("Image", dest_image)
+                    print(f"  ✓ Copied Image folder")
+                else:
+                    print(f"  ✓ Image folder already exists")
+            except Exception as e:
+                print(f"  ⚠ Could not copy Image folder: {e}")
+    except Exception as e:
+        print(f"  ⚠ Error during file copy: {e}")
 
 print("\nProcessing warranty data...")
 WARRANTY_DATA['credit_df'], WARRANTY_DATA['debit_df'], WARRANTY_DATA['arbitration_df'], WARRANTY_DATA['source_df'] = process_warranty_data()
