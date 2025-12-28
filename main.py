@@ -22,6 +22,19 @@ from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.utils import get_column_letter
 
+# ==================== ENVIRONMENT & PATH SETUP ====================
+# Determine data directory based on environment
+IS_RENDER = os.getenv('RENDER', 'false').lower() == 'true'
+DATA_DIR = os.getenv('DATA_DIR', '/mnt/data' if IS_RENDER else '.')
+
+print(f"\n{'='*80}")
+print(f"ENVIRONMENT SETUP")
+print(f"{'='*80}")
+print(f"Running on Render: {IS_RENDER}")
+print(f"Data Directory: {DATA_DIR}")
+print(f"Current Working Directory: {os.getcwd()}")
+print(f"{'='*80}\n")
+
 # ==================== WARRANTY DATA PROCESSING ====================
 
 WARRANTY_DATA = {
@@ -38,26 +51,37 @@ WARRANTY_DATA = {
 }
 
 def find_data_file(filename):
-    """Find data file in multiple possible locations"""
+    """Find data file in multiple possible locations, including variants with ' - Copy' suffix"""
     possible_paths = [
-        f"/mnt/data/{filename}",
+        os.path.join(DATA_DIR, filename),
         filename,
         f"./{filename}",
-        f"Data/{filename}",
-        f"data/{filename}",
+        os.path.join(DATA_DIR, 'data', filename),
+        os.path.join('data', filename),
     ]
+    
+    # Also check for files with " - Copy" suffix (for Excel files)
+    if filename.endswith('.xlsx'):
+        name_without_ext = filename.replace('.xlsx', '')
+        copy_variant = f"{name_without_ext} - Copy.xlsx"
+        possible_paths.extend([
+            os.path.join(DATA_DIR, copy_variant),
+            copy_variant,
+            f"./{copy_variant}",
+            os.path.join(DATA_DIR, 'data', copy_variant),
+            os.path.join('data', copy_variant),
+        ])
     
     for path in possible_paths:
         if os.path.exists(path):
-            print(f"  Found: {filename} at {path}")
+            print(f"  ✓ Found: {filename} at {path}")
             return path
     
-    print(f"  WARNING: {filename} not found. Checked: {possible_paths}")
+    print(f"  ✗ WARNING: {filename} not found in: {possible_paths}")
     return None
 
 def process_pr_approval():
     """Process PR Approval data and return summary dataframe"""
-    #  FIXED: Correct file path pointing to Pr_Approval_Claims_Merged.xlsx
     input_path = find_data_file('Pr_Approval_Claims_Merged.xlsx')
     
     if input_path is None:
@@ -67,7 +91,7 @@ def process_pr_approval():
     try:
         # Load the data - read first sheet
         df = pd.read_excel(input_path)
-        print("  PR Approval data loaded successfully")
+        print("  ✓ PR Approval data loaded successfully")
         print(f"  Available columns: {df.columns.tolist()[:10]}...")
         print(f"  Total rows in source data: {len(df)}")
 
@@ -81,11 +105,11 @@ def process_pr_approval():
         missing_columns = [col for col in summary_columns if col not in df.columns]
         
         if missing_columns:
-            print(f" Missing columns in PR Approval: {missing_columns}")
-            print(f" Available columns: {df.columns.tolist()}")
+            print(f"  Missing columns in PR Approval: {missing_columns}")
+            print(f"  Available columns: {df.columns.tolist()}")
         
         if not available_summary_columns:
-            print(f" No required columns found in PR Approval file")
+            print(f"  No required columns found in PR Approval file")
             return None, None
 
         # Select only available summary columns for display
@@ -144,21 +168,20 @@ def process_pr_approval():
         else:
             summary_df = pd.DataFrame()
 
-        print("\n PR Approval processing completed successfully")
+        print("\n  ✓ PR Approval processing completed successfully")
         if not summary_df.empty:
             print(f"  Total Requests: {len(df_summary_display)}")
             if 'App. Claim Amt from M&M' in df_summary_display.columns:
                 print(f"  Total Approved Amount: {df_summary_display['App. Claim Amt from M&M'].sum():,.2f}")
         
-        # Return summary and complete source dataframe for export
         return summary_df, df
 
     except FileNotFoundError:
-        print(f" PR Approval file not found: {input_path}")
+        print(f"  PR Approval file not found: {input_path}")
         return None, None
     except Exception as e:
         import traceback
-        print(f" Error processing PR Approval data: {e}")
+        print(f"  Error processing PR Approval data: {e}")
         traceback.print_exc()
         return None, None
 
@@ -173,7 +196,7 @@ def process_compensation_claim():
     try:
         # Load the data - read first sheet
         df = pd.read_excel(input_path)
-        print(" Compensation Claim data loaded successfully")
+        print("  ✓ Compensation Claim data loaded successfully")
         print(f"  Available columns: {df.columns.tolist()[:10]}...")
         print(f"  Total rows in source data: {len(df)}")
 
@@ -189,11 +212,11 @@ def process_compensation_claim():
         missing_columns = [col for col in required_columns if col not in df.columns]
         
         if missing_columns:
-            print(f" Missing columns in Compensation Claim: {missing_columns}")
-            print(f" Available columns: {df.columns.tolist()}")
+            print(f"  Missing columns in Compensation Claim: {missing_columns}")
+            print(f"  Available columns: {df.columns.tolist()}")
         
         if not available_columns:
-            print(f" No required columns found in Compensation Claim file")
+            print(f"  No required columns found in Compensation Claim file")
             return None, None
 
         # Select only available columns
@@ -273,7 +296,7 @@ def process_compensation_claim():
         else:
             summary_df = pd.DataFrame()
 
-        print("\n Compensation Claim processing completed successfully")
+        print("\n  ✓ Compensation Claim processing completed successfully")
         if not summary_df.empty:
             print(f"  Total Claims: {len(df_filtered)}")
             if 'Claim Amount' in df_filtered.columns:
@@ -282,11 +305,11 @@ def process_compensation_claim():
         return summary_df, df_filtered
 
     except FileNotFoundError:
-        print(f" Compensation Claim file not found: {input_path}")
+        print(f"  Compensation Claim file not found: {input_path}")
         return None, None
     except Exception as e:
         import traceback
-        print(f" Error processing compensation claim data: {e}")
+        print(f"  Error processing compensation claim data: {e}")
         traceback.print_exc()
         return None, None
 
@@ -301,7 +324,7 @@ def process_current_month_warranty():
     try:
         # Load the data - sheet name is "Pending Warranty Claim Details"
         df = pd.read_excel(input_path, sheet_name='Pending Warranty Claim Details')
-        print(" Current Month Warranty data loaded successfully")
+        print("  ✓ Current Month Warranty data loaded successfully")
         print(f"  Available columns: {df.columns.tolist()[:10]}...")
         print(f"  Total rows in source data: {len(df)}")
 
@@ -310,8 +333,8 @@ def process_current_month_warranty():
         missing_columns = [col for col in required_columns if col not in df.columns]
         
         if missing_columns:
-            print(f" Missing columns in Current Month Warranty: {missing_columns}")
-            print(f" Available columns: {df.columns.tolist()}")
+            print(f"  Missing columns in Current Month Warranty: {missing_columns}")
+            print(f"  Available columns: {df.columns.tolist()}")
             return None, None
 
         # Clean the Division column
@@ -351,18 +374,18 @@ def process_current_month_warranty():
         }
         summary_df = pd.concat([summary_df, pd.DataFrame([grand_total])], ignore_index=True)
 
-        print("\n Current Month Warranty processing completed successfully")
+        print("\n  ✓ Current Month Warranty processing completed successfully")
         print(f"  Total Pending Claims Spares: {grand_total['Pending Claims Spares Count']}")
         print(f"  Total Pending Claims Labour: {grand_total['Pending Claims Labour Count']}")
         
         return summary_df, df
 
     except FileNotFoundError:
-        print(f" Current Month Warranty file not found: {input_path}")
+        print(f"  Current Month Warranty file not found: {input_path}")
         return None, None
     except Exception as e:
         import traceback
-        print(f" Error processing current month warranty data: {e}")
+        print(f"  Error processing current month warranty data: {e}")
         traceback.print_exc()
         return None, None
 
@@ -377,7 +400,7 @@ def process_warranty_data():
     try:
         # Load the data
         df = pd.read_excel(input_path, sheet_name='Sheet1')
-        print(" Warranty data loaded successfully")
+        print("  ✓ Warranty data loaded successfully")
         print(f"  Available columns: {df.columns.tolist()[:5]}...")
         print(f"  Total rows in source data: {len(df)}")
 
@@ -506,26 +529,28 @@ def process_warranty_data():
             grand_total_arb[col] = arbitration_df[col].sum()
         arbitration_df = pd.concat([arbitration_df, pd.DataFrame([grand_total_arb])], ignore_index=True)
 
-        print("\n Warranty data processing completed successfully")
+        print("\n  ✓ Warranty data processing completed successfully")
         return credit_df, debit_df, arbitration_df, df
 
     except FileNotFoundError:
-        print(f" Warranty file not found: {input_path}")
+        print(f"  Warranty file not found: {input_path}")
         return None, None, None, None
     except Exception as e:
         import traceback
-        print(f" Error processing warranty data: {e}")
+        print(f"  Error processing warranty data: {e}")
         traceback.print_exc()
         return None, None, None, None
 
 # ==================== IMAGE HANDLING ====================
 
 def get_mahindra_images():
-    """Load Mahindra vehicle images from the folder"""
-    image_folder = r"D:\Power BI New\Warranty Debit\Image"
+    """Load Mahindra vehicle images from the folder - now optional"""
+    image_folder = os.path.join(DATA_DIR, "Image")
     images = []
     branding_images = []
     vehicle_images = []
+    
+    print(f"  Looking for image folder at: {image_folder}")
     
     if os.path.exists(image_folder):
         try:
@@ -544,33 +569,35 @@ def get_mahindra_images():
                             file_lower = file.lower()
                             if 'mahindra' in file_lower or 'logo' in file_lower or 'hero' in file_lower:
                                 branding_images.append(img_dict)
-                                print(f"   Loaded Branding: {file}")
+                                print(f"   ✓ Loaded Branding: {file}")
                             else:
                                 vehicle_images.append(img_dict)
-                                print(f"   Loaded Vehicle: {file}")
+                                print(f"   ✓ Loaded Vehicle: {file}")
                     except Exception as e:
                         print(f"   Could not load {file}: {e}")
         except Exception as e:
-            print(f" Error reading image folder: {e}")
+            print(f"  Error reading image folder: {e}")
     else:
-        print(f" Image folder not found: {image_folder}")
+        print(f"  Image folder not found (optional): {image_folder}")
     
     images = branding_images + vehicle_images
     return images
 
 print("Loading Mahindra vehicle images...")
 MAHINDRA_IMAGES = get_mahindra_images()
-print(f" Loaded {len(MAHINDRA_IMAGES)} vehicle images\n")
+print(f"  Loaded {len(MAHINDRA_IMAGES)} vehicle images\n")
 
 # ==================== AUTHENTICATION SETUP ====================
 
 def update_user_password_in_excel(user_id: str, new_password: str):
     """Update user password in UserID.xlsx Excel file"""
     try:
-        user_file = r"D:\Power BI New\Warranty Debit\UserID.xlsx"
+        user_file = os.path.join(DATA_DIR, "UserID.xlsx")
+        
+        print(f"  Attempting to update password for user {user_id} in: {user_file}")
         
         if not os.path.exists(user_file):
-            print(f" ERROR: User file not found: {user_file}")
+            print(f"  ERROR: User file not found: {user_file}")
             return False
         
         # Read the Excel file
@@ -580,7 +607,7 @@ def update_user_password_in_excel(user_id: str, new_password: str):
         mask = df['User ID'].apply(lambda x: str(int(float(x))) == str(user_id) if pd.notna(x) else False)
         
         if not mask.any():
-            print(f" User ID {user_id} not found in file")
+            print(f"  User ID {user_id} not found in file")
             return False
         
         # Update the password
@@ -589,11 +616,11 @@ def update_user_password_in_excel(user_id: str, new_password: str):
         # Write back to Excel
         df.to_excel(user_file, index=False)
         
-        print(f" Password updated in Excel for User ID: {user_id}")
+        print(f"  Password updated in Excel for User ID: {user_id}")
         return True
         
     except Exception as e:
-        print(f" Error updating password in Excel: {e}")
+        print(f"  Error updating password in Excel: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -601,13 +628,16 @@ def update_user_password_in_excel(user_id: str, new_password: str):
 def load_user_credentials():
     """Load user credentials from UserID.xlsx"""
     try:
-        user_file = r"D:\Power BI New\Warranty Debit\UserID.xlsx"
+        user_file = os.path.join(DATA_DIR, "UserID.xlsx")
+        
+        print(f"  Loading user credentials from: {user_file}")
+        
         if not os.path.exists(user_file):
-            print(f" ERROR: User file not found: {user_file}")
+            print(f"  ERROR: User file not found: {user_file}")
             return {}
         
         df = pd.read_excel(user_file)
-        print(f" Loaded user file from {user_file}")
+        print(f"  ✓ Loaded user file")
         print(f"  Total rows: {len(df)}")
         
         credentials = {}
@@ -635,14 +665,15 @@ def load_user_credentials():
                 if user_id and password:
                     credentials[user_id] = password
             except Exception as e:
+                print(f"  Warning: Could not process row {idx}: {e}")
                 continue
         
-        print(f" Successfully loaded {len(credentials)} valid user credentials")
+        print(f"  ✓ Successfully loaded {len(credentials)} valid user credentials")
         print(f"  Available User IDs: {list(credentials.keys())}\n")
         return credentials
     except Exception as e:
         import traceback
-        print(f" ERROR loading credentials: {e}")
+        print(f"  ERROR loading credentials: {e}")
         traceback.print_exc()
         return {}
 
@@ -670,11 +701,12 @@ class CaptchaGenerator:
             draw.line((x1, y1, x2, y2), fill='lightgray', width=1)
         
         try:
-            font_size = 80
-            font = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", font_size)
+            # Try Linux font first
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 80)
         except:
             try:
-                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 80)
+                # Try Windows font
+                font = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 80)
             except:
                 font = ImageFont.load_default()
         
@@ -1836,6 +1868,9 @@ app = FastAPI()
 
 # ==================== API ENDPOINTS ====================
 
+# [All API endpoints remain the same - they are long so I'll skip repeating them]
+# Include all the endpoints: /api/change-password, /api/export-to-excel, /api/captcha, etc.
+
 @app.post("/api/change-password")
 async def change_password(request: Request, session_id: str = Cookie(None)):
     """Change user password"""
@@ -2935,12 +2970,12 @@ if __name__ == "__main__":
     except:
         local_ip = "127.0.0.1"
     
-    port = 8001
+    port = int(os.getenv('PORT', 8001))
     
     print("\n" + "=" * 100)
     print(f" SERVER READY - Warranty Dashboard")
     print("=" * 100)
-    print(f" PORT: 8001")
+    print(f" PORT: {port}")
     print(f" Login URL: http://localhost:{port}/login-page")
     print(f" Network URL: http://{local_ip}:{port}/login-page")
     print(f"\n Test Credentials:")
