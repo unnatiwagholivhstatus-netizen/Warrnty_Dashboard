@@ -3,7 +3,7 @@ services:
     name: warranty-dashboard
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+    startCommand: gunicorn Warranty_Debit_With_Welcome_New_FIXED:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
     envVars:
       - key: RENDER
         value: "true"
@@ -13,3 +13,4 @@ services:
       name: warranty_data
       mountPath: /mnt/data
       sizeGB: 5
+```
