@@ -2947,9 +2947,42 @@ async def root():
 
 # ==================== STARTUP ====================
 
+# ==================== STARTUP ====================
+
 print("\n" + "=" * 100)
 print("STARTING WARRANTY MANAGEMENT SYSTEM - PORT 8001")
 print("=" * 100)
+
+# Copy files from current directory to /mnt/data if on Render
+if IS_RENDER:
+    print("\n📁 Setting up data directory on Render...")
+    import shutil
+    import glob
+    
+    # Create /mnt/data directory if it doesn't exist
+    os.makedirs(DATA_DIR, exist_ok=True)
+    print(f"  ✓ Created data directory: {DATA_DIR}")
+    
+    # Copy Excel files
+    excel_files = glob.glob("*.xlsx")
+    for file in excel_files:
+        try:
+            dest = os.path.join(DATA_DIR, file)
+            shutil.copy2(file, dest)
+            print(f"  ✓ Copied: {file}")
+        except Exception as e:
+            print(f"  ✗ Could not copy {file}: {e}")
+    
+    # Copy Image folder if it exists
+    if os.path.exists("Image"):
+        try:
+            dest_image = os.path.join(DATA_DIR, "Image")
+            if os.path.exists(dest_image):
+                shutil.rmtree(dest_image)
+            shutil.copytree("Image", dest_image)
+            print(f"  ✓ Copied Image folder")
+        except Exception as e:
+            print(f"  ✗ Could not copy Image folder: {e}")
 
 print("\nProcessing warranty data...")
 WARRANTY_DATA['credit_df'], WARRANTY_DATA['debit_df'], WARRANTY_DATA['arbitration_df'], WARRANTY_DATA['source_df'] = process_warranty_data()
