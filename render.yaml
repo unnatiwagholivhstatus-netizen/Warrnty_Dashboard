@@ -6,21 +6,16 @@ services:
     startCommand: >
       bash -lc "
       mkdir -p /mnt/data &&
-      cp -v ./*.xlsx /mnt/data/ 2>/dev/null || echo 'No xlsx files to copy' &&
-      cp -v UserID.xlsx /mnt/data/UserID.xlsx 2>/dev/null || echo 'UserID.xlsx not found in repo' &&
-      if [ -d ./Image ]; then
-        mkdir -p /mnt/data/Image && 
-        cp -v ./Image/* /mnt/data/Image/ 2>/dev/null || echo 'No images to copy';
-      fi &&
-      python main.py
+      cp -v ./*.xlsx /mnt/data/ 2>/dev/null || true &&
+      cp -v UserID.xlsx /mnt/data/ 2>/dev/null || true &&
+      if [ -d ./Image ]; then mkdir -p /mnt/data/Image && cp -v ./Image/* /mnt/data/Image/ 2>/dev/null || true; fi &&
+      gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
       "
     envVars:
       - key: RENDER
         value: "true"
       - key: DATA_DIR
         value: /mnt/data
-      - key: PORT
-        value: "8001"
     disk:
       name: warranty_data
       mountPath: /mnt/data
