@@ -1,16 +1,3 @@
-"""
-COMPLETE WARRANTY MANAGEMENT SYSTEM - PRODUCTION READY
-========================================================
-✅ 6 Warranty Tabs (Credit, Debit, Arbitration, Current Month, Compensation, PR Approval)
-✅ Complete Excel Export with ALL columns including TAT for Compensation
-✅ Desktop & Mobile Responsive Design (480px, 768px, 1400px+ breakpoints)
-✅ Professional UI with Orange Theme (#FF8C00)
-✅ Complete Authentication with CAPTCHA & Sessions (8 hours)
-✅ All error handling & conditions
-✅ Ready for Render.com deployment
-✅ All imports & dependencies included
-"""
-
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
