@@ -1,13 +1,3 @@
-"""
-COMPLETE WARRANTY MANAGEMENT SYSTEM - MOBILE RESPONSIVE VERSION
-✅ All 6 warranty tabs
-✅ Full mobile responsive design (iPhone, iPad, Android)
-✅ Touch-friendly interface
-✅ Complete error handling
-✅ Professional UI/UX
-✅ Fast performance on mobile
-"""
-
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -22,16 +12,17 @@ import secrets
 from PIL import Image, ImageDraw, ImageFont
 import io
 import base64
+import traceback
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from openpyxl.utils import get_column_letter
-import traceback
 
+# ==================== ENVIRONMENT SETUP ====================
 IS_RENDER = os.getenv('RENDER', 'false').lower() == 'true'
 DATA_DIR = os.getenv('DATA_DIR', '/mnt/data' if IS_RENDER else '.')
 
 print(f"\n{'='*100}")
-print(f"WARRANTY MANAGEMENT SYSTEM - MOBILE RESPONSIVE VERSION")
+print(f"WARRANTY MANAGEMENT SYSTEM - FIXED EXCEL EXPORT")
 print(f"{'='*100}")
 print(f"Environment: {'Render' if IS_RENDER else 'Local'}")
 print(f"Data Directory: {DATA_DIR}\n")
@@ -51,17 +42,25 @@ WARRANTY_DATA = {
 
 def find_data_file(filename):
     possible_paths = [
-        filename, f"./{filename}", os.path.join(DATA_DIR, filename),
-        os.path.join(DATA_DIR, 'data', filename), os.path.join('data', filename),
+        filename, f"./{filename}",
+        os.path.join(DATA_DIR, filename),
+        os.path.join(DATA_DIR, 'data', filename),
+        os.path.join('data', filename),
     ]
+    
     if filename.endswith('.xlsx'):
         name_without_ext = filename.replace('.xlsx', '')
         copy_variant = f"{name_without_ext} - Copy.xlsx"
-        possible_paths.extend([copy_variant, f"./{copy_variant}", os.path.join(DATA_DIR, copy_variant)])
+        possible_paths.extend([
+            copy_variant, f"./{copy_variant}",
+            os.path.join(DATA_DIR, copy_variant),
+        ])
+    
     for path in possible_paths:
         if os.path.exists(path):
             print(f"✓ Found: {filename}")
             return path
+    
     print(f"✗ Not found: {filename}")
     return None
 
@@ -69,6 +68,7 @@ def process_warranty_data():
     input_path = find_data_file('Warranty Debit.xlsx')
     if input_path is None:
         return None, None, None, None
+    
     try:
         df = pd.read_excel(input_path, sheet_name='Sheet1')
         print(f"Processing Warranty Debit - {len(df)} rows")
@@ -81,7 +81,8 @@ def process_warranty_data():
         }
 
         for col in ['Total Claim Amount', 'Credit Note Amount', 'Debit Note Amount']:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
         df['Dealer_Code'] = df['Dealer Location'].map(dealer_mapping).fillna(df['Dealer Location'])
         df['Month'] = df['Fiscal Month'].astype(str).str.strip().str[:3]
@@ -170,6 +171,7 @@ def process_current_month_warranty():
     input_path = find_data_file('Pending Warranty Claim Details.xlsx')
     if input_path is None:
         return None, None
+    
     try:
         df = pd.read_excel(input_path, sheet_name='Pending Warranty Claim Details')
         print(f"Processing Current Month Warranty - {len(df)} rows")
@@ -212,6 +214,7 @@ def process_compensation_claim():
     input_path = find_data_file('Transit_Claims_Merged.xlsx')
     if input_path is None:
         return None, None
+    
     try:
         df = pd.read_excel(input_path)
         print(f"Processing Compensation Claims - {len(df)} rows")
@@ -266,6 +269,7 @@ def process_pr_approval():
     input_path = find_data_file('Pr_Approval_Claims_Merged.xlsx')
     if input_path is None:
         return None, None
+    
     try:
         df = pd.read_excel(input_path)
         print(f"Processing PR Approval - {len(df)} rows")
@@ -394,73 +398,47 @@ LOGIN_PAGE = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Warranty Management - Login</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { width: 100%; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-body { background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 10px; }
-.login-wrapper { background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); width: 100%; max-width: 1000px; display: grid; grid-template-columns: 1fr 1fr; max-height: 90vh; overflow-y: auto; }
-.login-left { padding: 25px; display: flex; flex-direction: column; justify-content: center; }
-.login-right { background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); padding: 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; text-align: center; }
-.logo-section h1 { font-size: 22px; color: #333; margin-bottom: 8px; }
-.logo-section p { color: #666; font-size: 13px; margin-bottom: 5px; }
-.login-form { display: flex; flex-direction: column; gap: 15px; margin-top: 15px; }
-.form-group { display: flex; flex-direction: column; gap: 6px; }
-.form-group label { font-weight: 600; color: #333; font-size: 12px; }
-.form-group input { padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; transition: all 0.3s; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); height: 100vh; display: flex; justify-content: center; align-items: center; }
+.login-wrapper { background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; width: 95vw; max-width: 1000px; display: grid; grid-template-columns: 1fr 1fr; }
+.login-left { padding: 40px; display: flex; flex-direction: column; justify-content: center; }
+.login-right { background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); padding: 40px; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; text-align: center; }
+h1 { font-size: 28px; color: #333; margin-bottom: 10px; }
+p { color: #666; font-size: 14px; margin-bottom: 5px; }
+.form-group { margin-bottom: 20px; }
+.form-group label { display: block; font-weight: 600; color: #333; margin-bottom: 8px; font-size: 14px; }
+.form-group input { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; transition: all 0.3s; }
 .form-group input:focus { outline: none; border-color: #FF8C00; box-shadow: 0 0 8px rgba(255,140,0,0.2); }
-.captcha-section { margin-top: 12px; padding: 10px; background: #f5f5f5; border-radius: 6px; }
-.captcha-image { width: 100%; height: auto; margin-bottom: 8px; border-radius: 4px; }
-.login-btn { background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); color: white; border: none; padding: 11px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.3s; font-size: 14px; }
-.login-btn:active { transform: translateY(1px); }
-.error-message { color: #c62828; font-size: 12px; display: none; padding: 8px; background: #ffebee; border-radius: 4px; border-left: 3px solid #c62828; }
+.captcha-section { margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 8px; }
+.captcha-image { width: 100%; height: auto; margin-bottom: 10px; border-radius: 4px; }
+.login-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 10px; transition: all 0.3s; }
+.login-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(255,140,0,0.3); }
+.error-message { color: #c62828; font-size: 13px; margin-top: 10px; display: none; padding: 10px; background: #ffebee; border-radius: 4px; border-left: 4px solid #c62828; }
 .error-message.show { display: block; }
-.right-content h2 { font-size: 28px; margin-bottom: 15px; }
-.right-content p { font-size: 14px; line-height: 1.5; }
-
-@media (max-width: 768px) {
-  .login-wrapper { grid-template-columns: 1fr; }
-  .login-left { padding: 20px; }
-  .login-right { padding: 20px; min-height: 200px; }
-  .logo-section h1 { font-size: 18px; }
-  .logo-section p { font-size: 12px; }
-  .right-content h2 { font-size: 22px; }
-}
-
-@media (max-width: 480px) {
-  body { padding: 5px; }
-  .login-wrapper { border-radius: 12px; }
-  .login-left { padding: 15px; }
-  .logo-section h1 { font-size: 16px; }
-  .form-group label { font-size: 11px; }
-  .form-group input { padding: 9px; font-size: 13px; }
-  .login-btn { padding: 10px; font-size: 13px; }
-  .error-message { font-size: 11px; }
-}
+.right-content h2 { font-size: 32px; margin-bottom: 20px; }
+.right-content p { font-size: 16px; line-height: 1.6; }
 </style>
 </head>
 <body>
 <div class="login-wrapper">
 <div class="login-left">
-<div class="logo-section">
-<h1>Warranty Management</h1>
-<p>Enter credentials to access dashboard</p>
-</div>
-<form class="login-form" onsubmit="handleLogin(event)">
+<h1>Warranty Management System</h1>
+<p style="margin-bottom: 25px;">Mahindra All Division Warranty Overview</p>
+<form onsubmit="handleLogin(event)">
 <div class="form-group">
 <label for="userId">User ID</label>
-<input type="text" id="userId" placeholder="Enter User ID" required autocomplete="username">
+<input type="text" id="userId" placeholder="Enter User ID" required>
 </div>
 <div class="form-group">
 <label for="password">Password</label>
-<input type="password" id="password" placeholder="Enter password" required autocomplete="current-password">
+<input type="password" id="password" placeholder="Enter password" required>
 </div>
 <div class="captcha-section">
 <img id="captchaImage" class="captcha-image" src="" alt="CAPTCHA">
-<input type="text" id="captchaInput" placeholder="Enter CAPTCHA" required style="width:100%;padding:8px;border:2px solid #e0e0e0;border-radius:4px;font-size:13px;">
+<input type="text" id="captchaInput" placeholder="Enter CAPTCHA" required style="width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 4px;">
 </div>
 <div class="error-message" id="errorMessage"></div>
 <button type="submit" class="login-btn">Login</button>
@@ -469,8 +447,8 @@ body { background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); min-height
 <div class="login-right">
 <div class="right-content">
 <h2>Welcome</h2>
-<p>Warranty Management System</p>
-<p style="margin-top:20px;font-size:12px;opacity:0.8;">Unnati Motors</p>
+<p>Warranty Management Dashboard</p>
+<p style="margin-top: 30px; font-size: 14px;">Unnati Motors</p>
 </div>
 </div>
 </div>
@@ -490,79 +468,41 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, shrink-to-fit=no">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#FF8C00">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Warranty Dashboard</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { width: 100%; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%); }
-.navbar { background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); color: white; padding: 12px 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: sticky; top: 0; z-index: 100; }
-.navbar h1 { font-size: 18px; font-weight: 700; text-align: center; }
-.container { max-width: 1400px; margin: 15px auto; padding: 0 10px; }
-.dashboard-content { background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 15px; }
-.nav-tabs { border-bottom: 2px solid #FF8C00; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 5px; overflow-x: auto; }
-.nav-tabs button { color: #666; font-weight: 600; border: none; border-bottom: 3px solid transparent; padding: 10px 12px; cursor: pointer; transition: all 0.3s; background: none; font-size: 12px; white-space: nowrap; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%); min-height: 100vh; }
+.navbar { background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); color: white; padding: 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: sticky; top: 0; z-index: 100; }
+.navbar h1 { max-width: 1400px; margin: 0 auto; font-size: 24px; padding: 0 20px; }
+.container { max-width: 1400px; margin: 30px auto; padding: 0 20px; }
+.dashboard-content { background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 30px; }
+.nav-tabs { border-bottom: 2px solid #FF8C00; margin-bottom: 30px; display: flex; flex-wrap: wrap; }
+.nav-tabs button { color: #666; font-weight: 600; border: none; border-bottom: 3px solid transparent; padding: 12px 15px; cursor: pointer; transition: all 0.3s; background: none; font-size: 14px; }
 .nav-tabs button:hover { color: #FF8C00; }
 .nav-tabs button.active { color: #FF8C00; border-bottom-color: #FF8C00; }
 .tab-content { display: none; }
 .tab-content.active { display: block; }
-.export-section { margin: 20px 0; padding: 15px; background: linear-gradient(135deg, #fff8f3 0%, #ffe8d6 100%); border-radius: 8px; border-left: 4px solid #FF8C00; }
-.export-section h3 { color: #FF8C00; margin-bottom: 12px; font-size: 14px; }
-.export-controls { display: flex; gap: 10px; flex-wrap: wrap; background: white; padding: 12px; border-radius: 6px; }
-.export-control-group { display: flex; gap: 5px; align-items: center; min-width: 150px; }
-.export-control-group label { font-weight: 600; color: #333; font-size: 12px; min-width: 70px; }
-.export-control-group select { padding: 6px; border: 2px solid #FF8C00; border-radius: 4px; cursor: pointer; background: white; font-size: 12px; flex: 1; min-width: 100px; }
-.export-btn { padding: 8px 15px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 12px; transition: all 0.3s; }
-.export-btn:active { transform: translateY(1px); }
-.data-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; overflow-x: auto; }
-.data-table thead th { background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); color: white; padding: 8px 6px; text-align: center; font-weight: 600; font-size: 10px; border: 1px solid #e0e0e0; }
-.data-table tbody td { padding: 7px 5px; border-bottom: 1px solid #e0e0e0; text-align: right; border: 1px solid #e0e0e0; }
+.export-section { margin: 30px 0; padding: 20px; background: linear-gradient(135deg, #fff8f3 0%, #ffe8d6 100%); border-radius: 8px; border-left: 5px solid #FF8C00; }
+.export-section h3 { color: #FF8C00; margin-bottom: 15px; font-size: 16px; }
+.export-controls { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; background: white; padding: 15px; border-radius: 6px; }
+.export-control-group { display: flex; gap: 8px; align-items: center; }
+.export-control-group label { font-weight: 600; color: #333; font-size: 14px; min-width: 80px; }
+.export-control-group select { padding: 8px 12px; border: 2px solid #FF8C00; border-radius: 4px; cursor: pointer; background: white; font-size: 13px; min-width: 150px; }
+.export-btn { padding: 10px 25px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 700; font-size: 14px; transition: all 0.3s; }
+.export-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(76,175,80,0.3); }
+.export-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+.data-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; overflow-x: auto; }
+.data-table thead th { background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); color: white; padding: 12px; text-align: center; font-weight: 600; font-size: 11px; border: none; }
+.data-table tbody td { padding: 10px 12px; border-bottom: 1px solid #e0e0e0; text-align: right; }
 .data-table tbody td:first-child { text-align: left; font-weight: 600; color: #333; }
 .data-table tbody tr:last-child { background: #fff8f3; font-weight: 700; border-top: 2px solid #FF8C00; color: #FF8C00; }
-.table-title { font-size: 13px; font-weight: 700; color: #FF8C00; margin-bottom: 10px; }
-.loading-spinner { display: none; text-align: center; padding: 30px; }
-.spinner { border: 3px solid rgba(255,140,0,0.2); border-top: 3px solid #FF8C00; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto; }
+.table-title { font-size: 16px; font-weight: 700; color: #FF8C00; margin-bottom: 15px; }
+.loading-spinner { display: none; text-align: center; padding: 40px; }
+.spinner { border: 4px solid rgba(255,140,0,0.2); border-top: 4px solid #FF8C00; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-.table-wrapper { overflow-x: auto; border-radius: 6px; }
-
-@media (max-width: 768px) {
-  .navbar h1 { font-size: 14px; }
-  .container { margin: 10px auto; padding: 0 8px; }
-  .dashboard-content { padding: 12px; border-radius: 8px; }
-  .nav-tabs { margin-bottom: 15px; gap: 3px; }
-  .nav-tabs button { padding: 8px 10px; font-size: 11px; }
-  .export-controls { flex-direction: column; gap: 8px; padding: 10px; }
-  .export-control-group { flex-direction: column; min-width: auto; }
-  .export-control-group label { min-width: auto; margin-bottom: 3px; }
-  .export-control-group select { min-width: auto; }
-  .export-btn { width: 100%; padding: 10px; font-size: 11px; }
-  .data-table { font-size: 10px; }
-  .data-table thead th { padding: 6px 4px; font-size: 9px; }
-  .data-table tbody td { padding: 5px 4px; }
-  .table-title { font-size: 12px; }
-}
-
-@media (max-width: 480px) {
-  .navbar { padding: 10px 10px; }
-  .navbar h1 { font-size: 13px; }
-  .container { margin: 8px auto; padding: 0 5px; }
-  .dashboard-content { padding: 10px; border-radius: 6px; }
-  .nav-tabs { margin-bottom: 12px; gap: 2px; }
-  .nav-tabs button { padding: 6px 8px; font-size: 10px; }
-  .export-section { margin: 12px 0; padding: 10px; border-left: 3px solid #FF8C00; }
-  .export-section h3 { margin-bottom: 8px; font-size: 12px; }
-  .export-controls { flex-direction: column; gap: 6px; padding: 8px; }
-  .export-control-group { flex-direction: column; }
-  .export-control-group label { font-size: 11px; margin-bottom: 2px; }
-  .export-control-group select { padding: 5px; font-size: 11px; }
-  .export-btn { width: 100%; padding: 9px; font-size: 11px; }
-  .data-table { font-size: 9px; margin-top: 10px; }
-  .data-table thead th { padding: 5px 3px; font-size: 8px; }
-  .data-table tbody td { padding: 4px 3px; }
-  .table-title { font-size: 11px; margin-bottom: 8px; }
-}
+.error-msg { color: red; padding: 15px; background: #ffe0e0; border-left: 4px solid red; border-radius: 4px; margin: 10px 0; display: none; }
+.error-msg.show { display: block; }
 </style>
 </head>
 <body>
@@ -573,9 +513,9 @@ html, body { width: 100%; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva,
 <div class="dashboard-content">
 <div class="loading-spinner" id="loadingSpinner">
 <div class="spinner"></div>
-<p style="margin-top:10px;color:#666;font-size:12px;">Loading data...</p>
+<p style="margin-top: 15px; color: #666;">Loading warranty data...</p>
 </div>
-<div id="warrantyTabs" style="display:none;">
+<div id="warrantyTabs" style="display: none;">
 <div class="nav-tabs">
 <button class="nav-link active" onclick="switchTab('credit')">💳 Credit</button>
 <button class="nav-link" onclick="switchTab('debit')">💸 Debit</button>
@@ -605,44 +545,33 @@ html, body { width: 100%; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva,
 <option value="pr_approval">PR</option>
 </select>
 </div>
-<button onclick="exportToExcel()" class="export-btn">📥 Export</button>
+<button onclick="exportToExcel()" class="export-btn" id="exportBtn">📥 Export</button>
 </div>
+<div class="error-msg" id="exportError"></div>
 </div>
 <div id="credit" class="tab-content active">
 <div class="table-title">Warranty Credit Note</div>
-<div class="table-wrapper">
 <table class="data-table" id="creditTable"><thead></thead><tbody></tbody></table>
-</div>
 </div>
 <div id="debit" class="tab-content">
 <div class="table-title">Warranty Debit Note</div>
-<div class="table-wrapper">
 <table class="data-table" id="debitTable"><thead></thead><tbody></tbody></table>
-</div>
 </div>
 <div id="arbitration" class="tab-content">
 <div class="table-title">Claim Arbitration</div>
-<div class="table-wrapper">
 <table class="data-table" id="arbitrationTable"><thead></thead><tbody></tbody></table>
-</div>
 </div>
 <div id="currentmonth" class="tab-content">
 <div class="table-title">Current Month - Pending</div>
-<div class="table-wrapper">
 <table class="data-table" id="currentMonthTable"><thead></thead><tbody></tbody></table>
-</div>
 </div>
 <div id="compensation" class="tab-content">
 <div class="table-title">Compensation Claim</div>
-<div class="table-wrapper">
 <table class="data-table" id="compensationTable"><thead></thead><tbody></tbody></table>
-</div>
 </div>
 <div id="pr_approval" class="tab-content">
 <div class="table-title">PR Approval</div>
-<div class="table-wrapper">
 <table class="data-table" id="prApprovalTable"><thead></thead><tbody></tbody></table>
-</div>
 </div>
 </div>
 </div>
@@ -655,7 +584,7 @@ if(response.status===401){window.location.href='/login-page';return;}
 if(!response.ok)throw new Error('Failed to load data');
 warrantyData=await response.json();populateTable(warrantyData.credit,'creditTable');populateTable(warrantyData.debit,'debitTable');populateTable(warrantyData.arbitration,'arbitrationTable');
 populateTable(warrantyData.currentMonth,'currentMonthTable');populateTable(warrantyData.compensation,'compensationTable');populateTable(warrantyData.prApproval,'prApprovalTable');loadDivisions();spinner.style.display='none';tabs.style.display='block';}
-catch(error){spinner.innerHTML='<p style="color:red;padding:15px;">Error loading data</p>';}
+catch(error){console.error('Error:',error);spinner.innerHTML='<p style="color:red;padding:15px;">Error loading data</p>';}
 }
 function populateTable(data,tableId){if(!data||data.length===0)return;const table=document.getElementById(tableId);const headers=Object.keys(data[0]);
 table.querySelector('thead').innerHTML=headers.map(h=>`<th>${h}</th>`).join('');table.querySelector('tbody').innerHTML=data.map((row)=>
@@ -668,12 +597,16 @@ if(data){data.forEach(row=>{if(row.Division&&row.Division!=='Grand Total'){divis
 const select=document.getElementById('divisionFilter');select.innerHTML='<option value="">-- Select --</option><option value="All">All</option>';
 Array.from(divisions).sort().forEach(div=>{const opt=document.createElement('option');opt.value=div;opt.textContent=div;select.appendChild(opt);});}
 document.getElementById('exportType')?.addEventListener('change',loadDivisions);
-async function exportToExcel(){const division=document.getElementById('divisionFilter').value;const type=document.getElementById('exportType').value;if(!division){alert('Select a division');return;}
-const btn=document.getElementById('exportBtn');btn.disabled=true;btn.textContent='⏳...';
-try{const response=await fetch('/api/export-to-excel',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({division,type})});
-if(!response.ok)throw new Error('Export failed');const blob=await response.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;
-a.download=`${type}_${division}_${new Date().toISOString().split('T')[0]}.xlsx`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);}
-catch(error){alert('Export failed');}finally{btn.disabled=false;btn.textContent='📥 Export';}}
+async function exportToExcel(){const division=document.getElementById('divisionFilter').value;const type=document.getElementById('exportType').value;const btn=document.getElementById('exportBtn');const errorDiv=document.getElementById('exportError');
+errorDiv.classList.remove('show');
+if(!division){errorDiv.textContent='Please select a division';errorDiv.classList.add('show');return;}
+btn.disabled=true;btn.textContent='⏳ Exporting...';
+try{console.log('Exporting:',{division,type});const response=await fetch('/api/export-to-excel',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({division,type})});
+console.log('Response status:',response.status);if(!response.ok){const text=await response.text();console.error('Error response:',text);throw new Error('Export failed: '+response.status);}
+const blob=await response.blob();console.log('Blob size:',blob.size);if(blob.size===0){throw new Error('Empty file received');}
+const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${type}_${division}_${new Date().toISOString().split('T')[0]}.xlsx`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);errorDiv.textContent='✓ Export completed successfully!';errorDiv.style.background='#e8f5e9';errorDiv.style.borderLeft='4px solid green';errorDiv.style.color='green';errorDiv.classList.add('show');setTimeout(()=>{errorDiv.classList.remove('show');},3000);}
+catch(error){console.error('Export error:',error);errorDiv.textContent='✗ Export failed: '+error.message;errorDiv.classList.add('show');}
+finally{btn.disabled=false;btn.textContent='📥 Export';}}
 window.onload=loadDashboard;
 </script>
 </body>
@@ -705,7 +638,7 @@ async def api_login(request: Request):
         return response
     except HTTPException as e:
         raise
-    except:
+    except Exception as e:
         raise HTTPException(status_code=400, detail="Error")
 
 @app.get("/api/warranty-data")
@@ -729,16 +662,26 @@ async def get_warranty_data():
         
         return {"credit": credit_records, "debit": debit_records, "arbitration": arbitration_records, 
                 "currentMonth": current_month_records, "compensation": compensation_records, "prApproval": pr_approval_records}
-    except:
+    except Exception as e:
+        print(f"Error: {e}")
         raise HTTPException(status_code=500, detail="Error")
 
 @app.post("/api/export-to-excel")
 async def export_to_excel(request: Request):
+    """FIXED Excel export with proper error handling"""
     try:
+        print("\n" + "="*80)
+        print("EXPORT REQUEST RECEIVED")
+        print("="*80)
+        
         body = await request.json()
         selected_division = body.get('division', 'All')
         export_type = body.get('type', 'credit')
         
+        print(f"Division: {selected_division}")
+        print(f"Type: {export_type}")
+        
+        # Get dataframe based on type
         if export_type == 'currentmonth':
             df = WARRANTY_DATA['current_month_df']
         elif export_type == 'compensation':
@@ -752,9 +695,18 @@ async def export_to_excel(request: Request):
         else:
             df = WARRANTY_DATA['arbitration_df']
         
-        if df is None or df.empty:
-            raise HTTPException(status_code=500, detail="No data")
+        # Validate data
+        if df is None:
+            print("ERROR: DataFrame is None")
+            raise HTTPException(status_code=500, detail=f"No data for {export_type}")
         
+        if df.empty:
+            print("ERROR: DataFrame is empty")
+            raise HTTPException(status_code=500, detail=f"Empty data for {export_type}")
+        
+        print(f"DataFrame loaded: {len(df)} rows, {len(df.columns)} columns")
+        
+        # Filter by division
         if selected_division != 'All' and selected_division != 'Grand Total':
             df_export = df[df['Division'] == selected_division].copy()
             grand_total_row = df[df['Division'] == 'Grand Total']
@@ -763,14 +715,20 @@ async def export_to_excel(request: Request):
         else:
             df_export = df.copy()
         
+        print(f"Filtered data: {len(df_export)} rows")
+        
+        # Create workbook
         wb = Workbook()
         ws = wb.active
         ws.title = export_type[:20]
         
+        # Define styles
         header_fill = PatternFill(start_color="FF8C00", end_color="FF8C00", fill_type="solid")
         header_font = Font(bold=True, color="FFFFFF", size=12)
         border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
         
+        # Write headers
+        print("Writing headers...")
         for col_idx, column in enumerate(df_export.columns, 1):
             cell = ws.cell(row=1, column=col_idx, value=column)
             cell.fill = header_fill
@@ -778,9 +736,12 @@ async def export_to_excel(request: Request):
             cell.border = border
             cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         
+        # Write data
+        print("Writing data...")
         for row_idx, row in enumerate(df_export.itertuples(index=False), 2):
             for col_idx, value in enumerate(row, 1):
                 cell = ws.cell(row=row_idx, column=col_idx)
+                
                 if isinstance(value, (int, float)):
                     cell.value = value
                     cell.number_format = '#,##0.00'
@@ -788,22 +749,41 @@ async def export_to_excel(request: Request):
                 else:
                     cell.value = str(value) if not pd.isna(value) else ''
                     cell.alignment = Alignment(horizontal='left', vertical='center')
+                
                 cell.border = border
         
+        # Adjust column widths
+        print("Adjusting column widths...")
         for col_idx, column in enumerate(df_export.columns, 1):
             max_length = min(max(df_export[column].astype(str).map(len).max(), len(str(column))) + 2, 30)
             ws.column_dimensions[get_column_letter(col_idx)].width = max_length
         
+        # Save to BytesIO
+        print("Saving to BytesIO...")
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
+        
+        file_size = len(output.getvalue())
         filename = f"{selected_division}_{export_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         
-        return StreamingResponse(iter([output.getvalue()]), 
-                               media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                               headers={"Content-Disposition": f"attachment; filename={filename}"})
-    except:
-        raise HTTPException(status_code=500, detail="Error")
+        print(f"File created: {filename}")
+        print(f"File size: {file_size} bytes")
+        print("="*80 + "\n")
+        
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except HTTPException as e:
+        raise
+    except Exception as e:
+        print(f"ERROR: {e}")
+        print(traceback.format_exc())
+        print("="*80 + "\n")
+        raise HTTPException(status_code=500, detail=f"Export error: {str(e)}")
 
 @app.get("/login-page")
 async def login_page():
@@ -817,6 +797,7 @@ async def dashboard():
 async def root():
     return HTMLResponse(content=DASHBOARD_HTML)
 
+# STARTUP
 print("Processing warranty data...\n")
 WARRANTY_DATA['credit_df'], WARRANTY_DATA['debit_df'], WARRANTY_DATA['arbitration_df'], WARRANTY_DATA['source_df'] = process_warranty_data()
 WARRANTY_DATA['current_month_df'], WARRANTY_DATA['current_month_source_df'] = process_current_month_warranty()
@@ -826,11 +807,10 @@ WARRANTY_DATA['pr_approval_df'], WARRANTY_DATA['pr_approval_source_df'] = proces
 if __name__ == "__main__":
     port = int(os.getenv('PORT', 8001))
     print("\n" + "="*100)
-    print("✅ SERVER READY - WARRANTY MANAGEMENT SYSTEM (MOBILE RESPONSIVE)")
+    print("✅ SERVER READY - WARRANTY MANAGEMENT SYSTEM (FIXED EXCEL EXPORT)")
     print("="*100)
     print(f"Port: {port}")
     print(f"URL: http://localhost:{port}")
-    print(f"Mobile URL: http://localhost:{port}")
     print(f"\nTest Credentials:")
     print(f"  User ID: 11724")
     print(f"  Password: un001@123")
