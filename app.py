@@ -1,12 +1,10 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 import os
-import socket
-from typing import Optional
 import sys
 import io
 import traceback
@@ -14,68 +12,37 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from openpyxl.utils import get_column_letter
 
-# ==================== ENVIRONMENT & PATH SETUP ====================
 IS_RENDER = os.getenv('RENDER', 'false').lower() == 'true'
 DATA_DIR = os.getenv('DATA_DIR', '/mnt/data' if IS_RENDER else '.')
 
 print(f"\n{'='*100}")
-print(f"WARRANTY MANAGEMENT SYSTEM - COMPLETE PRODUCTION VERSION")
-print(f"{'='*100}")
-print(f"Environment: {'Render.com' if IS_RENDER else 'Local'}")
-print(f"Data Directory: {DATA_DIR}")
-print(f"Python Version: {sys.version.split()[0]}")
+print(f"WARRANTY MANAGEMENT SYSTEM - FINAL COMPLETE")
 print(f"{'='*100}\n")
 
-# ==================== WARRANTY DATA STORAGE ====================
 WARRANTY_DATA = {
-    'credit_df': None,
-    'debit_df': None,
-    'arbitration_df': None,
-    'source_df': None,
-    'current_month_df': None,
-    'current_month_source_df': None,
-    'compensation_df': None,
-    'compensation_source_df': None,
-    'pr_approval_df': None,
-    'pr_approval_source_df': None
+    'credit_df': None, 'debit_df': None, 'arbitration_df': None, 'source_df': None,
+    'current_month_df': None, 'current_month_source_df': None,
+    'compensation_df': None, 'compensation_source_df': None,
+    'pr_approval_df': None, 'pr_approval_source_df': None
 }
 
-# ==================== UTILITY FUNCTIONS ====================
-
 def find_data_file(filename):
-    """Find data file in multiple possible locations"""
-    possible_paths = [
-        filename,
-        f"./{filename}",
-        os.path.join(DATA_DIR, filename),
-        os.path.join(DATA_DIR, 'data', filename),
-        os.path.join('data', filename),
-    ]
+    possible_paths = [filename, f"./{filename}", os.path.join(DATA_DIR, filename),
+                     os.path.join(DATA_DIR, 'data', filename), os.path.join('data', filename)]
     
     if filename.endswith('.xlsx'):
-        name_without_ext = filename.replace('.xlsx', '')
-        copy_variant = f"{name_without_ext} - Copy.xlsx"
-        possible_paths.extend([
-            copy_variant,
-            f"./{copy_variant}",
-            os.path.join(DATA_DIR, copy_variant),
-            os.path.join(DATA_DIR, 'data', copy_variant),
-            os.path.join('data', copy_variant),
-        ])
+        name = filename.replace('.xlsx', '')
+        copy_variant = f"{name} - Copy.xlsx"
+        possible_paths.extend([copy_variant, f"./{copy_variant}", os.path.join(DATA_DIR, copy_variant)])
     
     for path in possible_paths:
         if os.path.exists(path):
-            print(f"  ✓ Found: {filename}")
+            print(f"  [DONE] Found: {filename}")
             return path
-    
-    print(f"  ✗ Not found: {filename}")
+    print(f"  [ERROR] Not found: {filename}")
     return None
 
-# ==================== STYLING HELPER ====================
-
 def style_worksheet(ws, df, header_fill, header_font, border):
-    """Apply styling to worksheet"""
-    # Write headers
     for col_idx, column in enumerate(df.columns, 1):
         cell = ws.cell(row=1, column=col_idx, value=column)
         cell.fill = header_fill
@@ -83,11 +50,9 @@ def style_worksheet(ws, df, header_fill, header_font, border):
         cell.border = border
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
     
-    # Write data
     for row_idx, row in enumerate(df.itertuples(index=False), 2):
         for col_idx, value in enumerate(row, 1):
             cell = ws.cell(row=row_idx, column=col_idx)
-            
             if isinstance(value, (int, float)):
                 cell.value = value
                 cell.number_format = '#,##0.00'
@@ -99,26 +64,22 @@ def style_worksheet(ws, df, header_fill, header_font, border):
             else:
                 cell.value = str(value) if not pd.isna(value) else ''
                 cell.alignment = Alignment(horizontal='left', vertical='center')
-            
             cell.border = border
     
-    # Adjust column widths
     for col_idx, column in enumerate(df.columns, 1):
         max_length = min(max(df[column].astype(str).map(len).max(), len(str(column))) + 2, 40)
         ws.column_dimensions[get_column_letter(col_idx)].width = max_length
 
-# ==================== DATA PROCESSING FUNCTIONS ====================
+# ================== DATA PROCESSING ==================
 
 def process_warranty_data():
-    """Process warranty credit, debit, and arbitration data"""
     input_path = find_data_file('Warranty Debit.xlsx')
-    
     if input_path is None:
         return None, None, None, None
     
     try:
         df = pd.read_excel(input_path, sheet_name='Sheet1')
-        print(f"  ✓ Warranty data loaded: {len(df)} rows")
+        print(f"  [DONE] Warranty data loaded: {len(df)} rows")
 
         dealer_mapping = {
             'AMRAVATI': 'AMT', 'CHAUFULA_SZZ': 'CHA', 'CHIKHALI': 'CHI',
@@ -139,7 +100,7 @@ def process_warranty_data():
         dealers = sorted(df['Dealer_Code'].unique())
         months = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-        # CREDIT NOTE
+        # CREDIT
         credit_df = pd.DataFrame({'Division': dealers})
         for month in months:
             month_data = df[df['Month'] == month]
@@ -158,7 +119,7 @@ def process_warranty_data():
             grand_total_credit[col] = credit_df[col].sum()
         credit_df = pd.concat([credit_df, pd.DataFrame([grand_total_credit])], ignore_index=True)
 
-        # DEBIT NOTE
+        # DEBIT
         debit_df = pd.DataFrame({'Division': dealers})
         for month in months:
             month_data = df[df['Month'] == month]
@@ -177,58 +138,51 @@ def process_warranty_data():
             grand_total_debit[col] = debit_df[col].sum()
         debit_df = pd.concat([debit_df, pd.DataFrame([grand_total_debit])], ignore_index=True)
 
-        # ARBITRATION
-        arbitration_df = pd.DataFrame({'Division': dealers})
-        
+        # ARBITRATION - TOTAL ONLY (NOT MONTH-WISE)
         def is_arbitration(value):
             if pd.isna(value): return False
             value = str(value).strip().upper()
             return value.startswith('ARB') and value != 'NAN' and value != ''
 
-        for month in months:
-            month_data = df[df['Month'] == month].copy()
-            arb_records = month_data[month_data['Claim arbitration ID'].apply(is_arbitration)]
-            arb_summary = arb_records.groupby('Dealer_Code')['Debit Note Amount'].sum().reset_index()
-            arb_summary.columns = ['Division', f'Claim Arbitration {month}']
-            arbitration_df = arbitration_df.merge(arb_summary, on='Division', how='left')
+        arbitration_data = []
+        for dealer in dealers:
+            dealer_data = df[df['Dealer_Code'] == dealer]
+            total_debit = dealer_data['Debit Note Amount'].sum()
+            arb_claimed = dealer_data[dealer_data['Claim arbitration ID'].apply(is_arbitration)]['Debit Note Amount'].sum()
+            arb_pending = max(0, total_debit - arb_claimed)
+            
+            arbitration_data.append({
+                'Division': dealer,
+                'Total Debit': total_debit,
+                'Arbitration Claimed': arb_claimed,
+                'Arbitration Not Claimed': arb_pending
+            })
         
-        arbitration_df = arbitration_df.fillna(0)
-        debit_copy = debit_df[debit_df['Division'] != 'Grand Total'][['Division', 'Total Debit']].copy()
-        arbitration_df = arbitration_df.merge(debit_copy, on='Division', how='left')
-        
-        arb_cols = [f'Claim Arbitration {m}' for m in months]
-        arbitration_df['Pending Claim Arbitration'] = (
-            arbitration_df['Total Debit'] - arbitration_df[arb_cols].sum(axis=1)
-        ).apply(lambda x: max(0, x))
-        
-        arbitration_df = arbitration_df.drop(['Total Debit'], axis=1)
-        grand_total_arb = {'Division': 'Grand Total'}
-        for col in arbitration_df.columns[1:]:
-            grand_total_arb[col] = arbitration_df[col].sum()
+        arbitration_df = pd.DataFrame(arbitration_data)
+        grand_total_arb = {
+            'Division': 'Grand Total',
+            'Total Debit': arbitration_df['Total Debit'].sum(),
+            'Arbitration Claimed': arbitration_df['Arbitration Claimed'].sum(),
+            'Arbitration Not Claimed': arbitration_df['Arbitration Not Claimed'].sum()
+        }
         arbitration_df = pd.concat([arbitration_df, pd.DataFrame([grand_total_arb])], ignore_index=True)
 
-        print("  ✓ Warranty processing completed")
+        print("  [DONE] Warranty processing completed")
         return credit_df, debit_df, arbitration_df, df
 
     except Exception as e:
-        print(f"  ✗ Error: {e}")
+        print(f"   Error: {e}")
         return None, None, None, None
 
 def process_current_month_warranty():
-    """Process current month pending warranty claims"""
     input_path = find_data_file('Pending Warranty Claim Details.xlsx')
-    
     if input_path is None:
         return None, None
     
     try:
         df = pd.read_excel(input_path, sheet_name='Pending Warranty Claim Details')
-        print(f"  ✓ Current Month Warranty loaded: {len(df)} rows")
+        print(f"   Current Month loaded: {len(df)} rows")
         
-        required_columns = ['Division', 'Pending Claims Spares', 'Pending Claims Labour']
-        if not all(col in df.columns for col in required_columns):
-            return None, None
-
         df['Division'] = df['Division'].astype(str).str.strip()
         df = df[df['Division'].notna() & (df['Division'] != '') & (df['Division'] != 'nan')]
 
@@ -237,39 +191,36 @@ def process_current_month_warranty():
             div_data = df[df['Division'] == division]
             summary_data.append({
                 'Division': division,
-                'Pending Claims Spares Count': int(div_data['Pending Claims Spares'].notna().sum()),
-                'Pending Claims Labour Count': int(div_data['Pending Claims Labour'].notna().sum()),
+                'Pending Spares Count': int(div_data['Pending Claims Spares'].notna().sum()),
+                'Pending Labour Count': int(div_data['Pending Claims Labour'].notna().sum()),
                 'Total Pending Claims': int(div_data['Pending Claims Spares'].notna().sum() + div_data['Pending Claims Labour'].notna().sum())
             })
         
         summary_df = pd.DataFrame(summary_data)
         grand_total = {
             'Division': 'Grand Total',
-            'Pending Claims Spares Count': int(summary_df['Pending Claims Spares Count'].sum()),
-            'Pending Claims Labour Count': int(summary_df['Pending Claims Labour Count'].sum()),
+            'Pending Spares Count': int(summary_df['Pending Spares Count'].sum()),
+            'Pending Labour Count': int(summary_df['Pending Labour Count'].sum()),
             'Total Pending Claims': int(summary_df['Total Pending Claims'].sum())
         }
         summary_df = pd.concat([summary_df, pd.DataFrame([grand_total])], ignore_index=True)
 
-        print("  ✓ Current Month processing completed")
+        print("   Current Month processing completed")
         return summary_df, df
 
     except Exception as e:
-        print(f"  ✗ Error: {e}")
+        print(f"   Error: {e}")
         return None, None
 
 def process_compensation_claim():
-    """Process compensation transit claims with ALL required columns"""
     input_path = find_data_file('Transit_Claims_Merged.xlsx')
-    
     if input_path is None:
         return None, None
     
     try:
         df = pd.read_excel(input_path)
-        print(f"  ✓ Compensation Claim loaded: {len(df)} rows")
+        print(f"   Compensation loaded: {len(df)} rows")
 
-        # ✅ ALL REQUIRED COLUMNS
         required_columns = [
             'Division', 'RO Id.', 'Registration No.', 'RO Date', 'RO Bill Date',
             'Chassis No.', 'Model Group', 'Claim Amount', 'Claim Date',
@@ -278,11 +229,6 @@ def process_compensation_claim():
         ]
         
         available_columns = [col for col in required_columns if col in df.columns]
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        
-        if missing_columns:
-            print(f"  ⚠ Missing columns: {missing_columns}")
-        
         if not available_columns:
             return None, None
 
@@ -294,7 +240,6 @@ def process_compensation_claim():
                                      (df_filtered['Division'] != '') & 
                                      (df_filtered['Division'] != 'nan')]
         
-        # Format RO Id
         if 'RO Id.' in df_filtered.columns:
             def format_ro_id(x):
                 if pd.isna(x) or str(x).strip() == '':
@@ -305,19 +250,16 @@ def process_compensation_claim():
                     return str(x).strip()
             df_filtered['RO Id.'] = df_filtered['RO Id.'].apply(format_ro_id)
         
-        # Clean numeric columns
         numeric_cols = ['Claim Amount', 'Claim Approved Amt.', 'No. of Days']
         for col in numeric_cols:
             if col in df_filtered.columns:
                 df_filtered[col] = pd.to_numeric(df_filtered[col], errors='coerce').fillna(0)
         
-        # Convert date columns
         date_cols = ['RO Date', 'RO Bill Date', 'Claim Date', 'Request Date']
         for col in date_cols:
             if col in df_filtered.columns:
                 df_filtered[col] = pd.to_datetime(df_filtered[col], errors='coerce')
         
-        # Create summary
         summary_data = []
         if 'Division' in df_filtered.columns:
             for division in sorted(df_filtered['Division'].unique()):
@@ -344,23 +286,21 @@ def process_compensation_claim():
         else:
             summary_df = pd.DataFrame()
 
-        print("  ✓ Compensation processing completed")
+        print("   Compensation processing completed")
         return summary_df, df_filtered
 
     except Exception as e:
-        print(f"  ✗ Error: {e}")
+        print(f"   Error: {e}")
         return None, None
 
 def process_pr_approval():
-    """Process PR Approval claims"""
     input_path = find_data_file('Pr_Approval_Claims_Merged.xlsx')
-    
     if input_path is None:
         return None, None
     
     try:
         df = pd.read_excel(input_path)
-        print(f"  ✓ PR Approval loaded: {len(df)} rows")
+        print(f"   PR Approval loaded: {len(df)} rows")
 
         if 'Division' not in df.columns:
             return None, None
@@ -396,115 +336,46 @@ def process_pr_approval():
                 grand_total[col] = summary_df[col].sum()
         summary_df = pd.concat([summary_df, pd.DataFrame([grand_total])], ignore_index=True)
 
-        print("  ✓ PR Approval processing completed")
+        print("   PR Approval processing completed")
         return summary_df, df
 
     except Exception as e:
-        print(f"  ✗ Error: {e}")
+        print(f"   Error: {e}")
         return None, None
 
-# ==================== DASHBOARD HTML ====================
+# ==================== HTML DASHBOARD ====================
 
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#FF8C00">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Warranty Dashboard</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { height: 100%; }
-body { 
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-    background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%); 
-    min-height: 100vh; 
-}
-.navbar { 
-    background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); 
-    color: white; 
-    padding: 15px 0; 
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15); 
-    position: sticky; 
-    top: 0; 
-    z-index: 100; 
-}
-.navbar h1 { 
-    max-width: 1400px; 
-    margin: 0 auto; 
-    font-size: 20px; 
-    padding: 0 20px; 
-    font-weight: 700;
-}
-.container { 
-    max-width: 1400px; 
-    margin: 20px auto; 
-    padding: 0 15px; 
-}
-.dashboard-content { 
-    background: white; 
-    border-radius: 12px; 
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
-    padding: 20px; 
-}
-.nav-tabs { 
-    border-bottom: 2px solid #FF8C00; 
-    margin-bottom: 20px; 
-    display: flex; 
-    flex-wrap: wrap; 
-    gap: 5px;
-}
-.nav-tabs button { 
-    color: #666; 
-    font-weight: 600; 
-    border: none; 
-    border-bottom: 3px solid transparent; 
-    padding: 10px 12px; 
-    cursor: pointer; 
-    transition: all 0.3s ease; 
-    background: none; 
-    font-size: 12px; 
-}
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%); min-height: 100vh; }
+.navbar { background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); color: white; padding: 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: sticky; top: 0; z-index: 100; }
+.navbar h1 { max-width: 1400px; margin: 0 auto; font-size: 20px; padding: 0 20px; font-weight: 700; }
+.container { max-width: 1400px; margin: 20px auto; padding: 0 15px; }
+.dashboard-content { background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; }
+.nav-tabs { border-bottom: 2px solid #FF8C00; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 5px; }
+.nav-tabs button { color: #666; font-weight: 600; border: none; border-bottom: 3px solid transparent; padding: 10px 12px; cursor: pointer; transition: all 0.3s ease; background: none; font-size: 12px; }
 .nav-tabs button:hover { color: #FF8C00; }
 .nav-tabs button.active { color: #FF8C00; border-bottom-color: #FF8C00; }
 .tab-content { display: none; }
 .tab-content.active { display: block; }
-.export-section { 
-    margin: 20px 0; 
-    padding: 15px; 
-    background: linear-gradient(135deg, #fff8f3 0%, #ffe8d6 100%); 
-    border-radius: 8px; 
-    border-left: 5px solid #FF8C00; 
-}
+.export-section { margin: 20px 0; padding: 15px; background: linear-gradient(135deg, #fff8f3 0%, #ffe8d6 100%); border-radius: 8px; border-left: 5px solid #FF8C00; }
 .export-section h3 { color: #FF8C00; margin-bottom: 12px; font-size: 14px; font-weight: 700; }
-.export-controls { 
-    display: flex; 
-    gap: 10px; 
-    align-items: center; 
-    flex-wrap: wrap; 
-    background: white; 
-    padding: 12px; 
-    border-radius: 6px; 
-}
+.export-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: white; padding: 12px; border-radius: 6px; }
 .export-control-group { display: flex; gap: 6px; align-items: center; }
 .export-control-group label { font-weight: 600; color: #333; font-size: 12px; min-width: 70px; }
 .export-control-group select { padding: 7px 10px; border: 2px solid #FF8C00; border-radius: 4px; background: white; font-size: 11px; min-width: 120px; }
-.export-btn { 
-    padding: 8px 18px; 
-    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); 
-    color: white; 
-    border: none; 
-    border-radius: 4px; 
-    cursor: pointer; 
-    font-weight: 700; 
-    font-size: 12px; 
-}
+.export-btn { padding: 8px 18px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 700; font-size: 12px; }
 .export-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(76, 175, 80, 0.3); }
 .table-wrapper { overflow-x: auto; }
 .data-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
-.data-table thead th { background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); color: white; padding: 10px 8px; text-align: center; font-weight: 600; font-size: 10px; }
+.data-table thead th { background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); color: white; padding: 10px 8px; text-align: center; font-weight: 600; }
 .data-table tbody td { padding: 8px; border-bottom: 1px solid #e0e0e0; text-align: right; }
 .data-table tbody td:first-child { text-align: left; font-weight: 600; }
 .data-table tbody tr:last-child { background: #fff8f3; font-weight: 700; border-top: 2px solid #FF8C00; color: #FF8C00; }
@@ -514,34 +385,10 @@ body {
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 .error-msg { color: #c62828; padding: 12px; background: #ffebee; border-left: 4px solid #c62828; border-radius: 4px; margin: 10px 0; display: none; font-size: 12px; }
 .error-msg.show { display: block; }
-@media (max-width: 768px) {
-    .navbar h1 { font-size: 16px; }
-    .container { padding: 0 10px; }
-    .dashboard-content { padding: 12px; }
-    .nav-tabs button { font-size: 10px; padding: 7px 8px; }
-    .export-control-group label { font-size: 11px; }
-    .data-table { font-size: 9px; }
-    .data-table thead th { font-size: 8px; padding: 6px 4px; }
-    .data-table tbody td { padding: 6px 4px; }
-}
-@media (max-width: 480px) {
-    .navbar h1 { font-size: 13px; }
-    .nav-tabs button { font-size: 8px; padding: 5px 6px; }
-    .export-controls { flex-direction: column; }
-    .export-control-group { flex-direction: column; }
-    .export-control-group select { width: 100%; }
-    .export-btn { width: 100%; }
-    .data-table { font-size: 7.5px; }
-    .data-table thead th { font-size: 7px; padding: 4px 2px; }
-    .data-table tbody td { padding: 4px 2px; }
-}
 </style>
 </head>
 <body>
-<nav class="navbar">
-<h1>Warranty Management Dashboard</h1>
-</nav>
-
+<nav class="navbar"><h1>Warranty Management Dashboard</h1></nav>
 <div class="container">
 <div class="dashboard-content">
 <div class="loading-spinner" id="loadingSpinner">
@@ -551,80 +398,65 @@ body {
 
 <div id="warrantyTabs" style="display: none;">
 <div class="nav-tabs">
-<button class="nav-link active" onclick="switchTab(event, 'credit')">💳 Credit</button>
-<button class="nav-link" onclick="switchTab(event, 'debit')">💸 Debit</button>
-<button class="nav-link" onclick="switchTab(event, 'arbitration')">⚖️ Arbitration</button>
-<button class="nav-link" onclick="switchTab(event, 'currentmonth')">📅 Current</button>
-<button class="nav-link" onclick="switchTab(event, 'compensation')">🚗 Compensation</button>
-<button class="nav-link" onclick="switchTab(event, 'pr_approval')">✅ PR Approval</button>
+<button class="nav-link active" onclick="switchTab(event, 'credit')">Credit</button>
+<button class="nav-link" onclick="switchTab(event, 'debit')">Debit</button>
+<button class="nav-link" onclick="switchTab(event, 'arbitration')">Arbitration</button>
+<button class="nav-link" onclick="switchTab(event, 'currentmonth')">Current Month</button>
+<button class="nav-link" onclick="switchTab(event, 'compensation')">Compensation</button>
+<button class="nav-link" onclick="switchTab(event, 'pr_approval')">PR Approval</button>
 </div>
 
 <div class="export-section">
-<h3>📊 Export to Excel (Multi-Sheet)</h3>
+<h3>Export to Excel</h3>
 <div class="export-controls">
 <div class="export-control-group">
 <label>Division:</label>
-<select id="divisionFilter">
-<option value="">-- Select --</option>
-<option value="All">All</option>
-</select>
+<select id="divisionFilter"><option value="">-- Select --</option><option value="All">All</option></select>
 </div>
 <div class="export-control-group">
 <label>Type:</label>
 <select id="exportType">
-<option value="credit">Credit (2 sheets)</option>
-<option value="debit">Debit (2 sheets)</option>
-<option value="arbitration">Arbitration (1 sheet)</option>
-<option value="currentmonth">Current Month (2 sheets)</option>
-<option value="compensation">Compensation (2 sheets + TAT)</option>
-<option value="pr_approval">PR Approval (2 sheets)</option>
+<option value="credit">Credit</option>
+<option value="debit">Debit</option>
+<option value="arbitration">Arbitration</option>
+<option value="currentmonth">Current Month</option>
+<option value="compensation">Compensation</option>
+<option value="pr_approval">PR Approval</option>
 </select>
 </div>
-<button onclick="exportToExcel()" class="export-btn" id="exportBtn">📥 Export</button>
+<button onclick="exportToExcel()" class="export-btn">Export</button>
 </div>
 <div class="error-msg" id="exportError"></div>
 </div>
 
 <div id="credit" class="tab-content active">
 <div class="table-title">Warranty Credit Note</div>
-<div class="table-wrapper">
-<table class="data-table" id="creditTable"><thead></thead><tbody></tbody></table>
-</div>
+<div class="table-wrapper"><table class="data-table" id="creditTable"><thead></thead><tbody></tbody></table></div>
 </div>
 
 <div id="debit" class="tab-content">
 <div class="table-title">Warranty Debit Note</div>
-<div class="table-wrapper">
-<table class="data-table" id="debitTable"><thead></thead><tbody></tbody></table>
-</div>
+<div class="table-wrapper"><table class="data-table" id="debitTable"><thead></thead><tbody></tbody></table></div>
 </div>
 
 <div id="arbitration" class="tab-content">
 <div class="table-title">Claim Arbitration</div>
-<div class="table-wrapper">
-<table class="data-table" id="arbitrationTable"><thead></thead><tbody></tbody></table>
-</div>
+<div class="table-wrapper"><table class="data-table" id="arbitrationTable"><thead></thead><tbody></tbody></table></div>
 </div>
 
 <div id="currentmonth" class="tab-content">
 <div class="table-title">Current Month Pending</div>
-<div class="table-wrapper">
-<table class="data-table" id="currentMonthTable"><thead></thead><tbody></tbody></table>
-</div>
+<div class="table-wrapper"><table class="data-table" id="currentMonthTable"><thead></thead><tbody></tbody></table></div>
 </div>
 
 <div id="compensation" class="tab-content">
 <div class="table-title">Compensation Claim</div>
-<div class="table-wrapper">
-<table class="data-table" id="compensationTable"><thead></thead><tbody></tbody></table>
-</div>
+<div class="table-wrapper"><table class="data-table" id="compensationTable"><thead></thead><tbody></tbody></table></div>
 </div>
 
 <div id="pr_approval" class="tab-content">
 <div class="table-title">PR Approval</div>
-<div class="table-wrapper">
-<table class="data-table" id="prApprovalTable"><thead></thead><tbody></tbody></table>
-</div>
+<div class="table-wrapper"><table class="data-table" id="prApprovalTable"><thead></thead><tbody></tbody></table></div>
 </div>
 </div>
 </div>
@@ -636,9 +468,6 @@ let warrantyData = {};
 async function loadDashboard() {
     const spinner = document.getElementById('loadingSpinner');
     const tabs = document.getElementById('warrantyTabs');
-    
-    spinner.style.display = 'block';
-    tabs.style.display = 'none';
     
     try {
         const response = await fetch('/api/warranty-data');
@@ -658,16 +487,14 @@ async function loadDashboard() {
         spinner.style.display = 'none';
         tabs.style.display = 'block';
     } catch (error) {
-        spinner.innerHTML = '<p style="color: red; padding: 15px;">Error loading data</p>';
+        spinner.innerHTML = '<p style="color: red;">Error loading data</p>';
     }
 }
 
 function populateTable(data, tableId) {
     if (!data || data.length === 0) return;
-    
     const table = document.getElementById(tableId);
     const headers = Object.keys(data[0]);
-    
     table.querySelector('thead').innerHTML = headers.map(h => `<th>${h}</th>`).join('');
     table.querySelector('tbody').innerHTML = data.map((row) =>
         `<tr>${headers.map((h) => {
@@ -715,7 +542,6 @@ document.getElementById('exportType')?.addEventListener('change', loadDivisions)
 async function exportToExcel() {
     const division = document.getElementById('divisionFilter').value;
     const type = document.getElementById('exportType').value;
-    const btn = document.getElementById('exportBtn');
     const errorDiv = document.getElementById('exportError');
     
     errorDiv.classList.remove('show');
@@ -725,9 +551,6 @@ async function exportToExcel() {
         errorDiv.classList.add('show');
         return;
     }
-    
-    btn.disabled = true;
-    btn.textContent = '⏳ Exporting...';
     
     try {
         const response = await fetch('/api/export-to-excel', {
@@ -750,17 +573,14 @@ async function exportToExcel() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        errorDiv.textContent = '✓ Export completed successfully';
+        errorDiv.textContent = ' Export completed successfully';
         errorDiv.style.background = '#e8f5e9';
         errorDiv.style.borderLeft = '4px solid #4CAF50';
         errorDiv.style.color = '#2e7d32';
         errorDiv.classList.add('show');
     } catch (error) {
-        errorDiv.textContent = '✗ Export failed: ' + error.message;
+        errorDiv.textContent = ' Export failed: ' + error.message;
         errorDiv.classList.add('show');
-    } finally {
-        btn.disabled = false;
-        btn.textContent = '📥 Export';
     }
 }
 
@@ -773,11 +593,8 @@ window.onload = loadDashboard;
 
 app = FastAPI()
 
-# ==================== API ENDPOINTS ====================
-
 @app.get("/api/warranty-data")
 async def get_warranty_data():
-    """Get all warranty data"""
     try:
         if WARRANTY_DATA['credit_df'] is None:
             return {"credit": [], "debit": [], "arbitration": [], "currentMonth": [], "compensation": [], "prApproval": []}
@@ -789,7 +606,6 @@ async def get_warranty_data():
         compensation_records = (WARRANTY_DATA['compensation_df'].to_dict('records') if WARRANTY_DATA['compensation_df'] is not None else [])
         pr_approval_records = (WARRANTY_DATA['pr_approval_df'].to_dict('records') if WARRANTY_DATA['pr_approval_df'] is not None else [])
         
-        # Handle NaN values
         for records in [credit_records, debit_records, arbitration_records, current_month_records, compensation_records, pr_approval_records]:
             for record in records:
                 for key in record:
@@ -797,38 +613,29 @@ async def get_warranty_data():
                         record[key] = 0
         
         return {
-            "credit": credit_records,
-            "debit": debit_records,
-            "arbitration": arbitration_records,
-            "currentMonth": current_month_records,
-            "compensation": compensation_records,
-            "prApproval": pr_approval_records
+            "credit": credit_records, "debit": debit_records, "arbitration": arbitration_records,
+            "currentMonth": current_month_records, "compensation": compensation_records, "prApproval": pr_approval_records
         }
     except Exception as e:
-        print(f"Error: {e}")
         raise HTTPException(status_code=500, detail="Error loading data")
 
 @app.post("/api/export-to-excel")
 async def export_to_excel(request: Request):
-    """Export warranty data to Excel with multiple sheets"""
     try:
         body = await request.json()
         selected_division = body.get('division', 'All')
         export_type = body.get('type', 'credit')
         
-        print(f"\n{'='*80}")
-        print(f"EXPORT: {selected_division} - {export_type}")
-        print(f"{'='*80}")
+        print(f"\nEXPORT: {selected_division} - {export_type}")
         
         header_fill = PatternFill(start_color="FF8C00", end_color="FF8C00", fill_type="solid")
         header_font = Font(bold=True, color="FFFFFF", size=12)
-        border = Border(left=Side(style='thin'), right=Side(style='thin'), 
-                       top=Side(style='thin'), bottom=Side(style='thin'))
+        border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
         
         wb = Workbook()
         wb.remove(wb.active)
         
-        # ===================== CREDIT EXPORT =====================
+        # ============ CREDIT ============
         if export_type == 'credit':
             df = WARRANTY_DATA['credit_df']
             if df is None or df.empty:
@@ -842,10 +649,10 @@ async def export_to_excel(request: Request):
             else:
                 df_export = df.copy()
             
-            ws1 = wb.create_sheet("Summary")
-            style_worksheet(ws1, df_export, header_fill, header_font, border)
+            ws = wb.create_sheet("Summary")
+            style_worksheet(ws, df_export, header_fill, header_font, border)
         
-        # ===================== DEBIT EXPORT =====================
+        # ============ DEBIT ============
         elif export_type == 'debit':
             df = WARRANTY_DATA['debit_df']
             if df is None or df.empty:
@@ -859,15 +666,18 @@ async def export_to_excel(request: Request):
             else:
                 df_export = df.copy()
             
-            ws1 = wb.create_sheet("Summary")
-            style_worksheet(ws1, df_export, header_fill, header_font, border)
+            ws = wb.create_sheet("Summary")
+            style_worksheet(ws, df_export, header_fill, header_font, border)
         
-        # ===================== ARBITRATION EXPORT =====================
+        # ============ ARBITRATION (3 SHEETS) ============
         elif export_type == 'arbitration':
             df = WARRANTY_DATA['arbitration_df']
+            source_df = WARRANTY_DATA['source_df']
+            
             if df is None or df.empty:
                 raise HTTPException(status_code=500, detail="No data")
             
+            # Sheet 1: Summary
             if selected_division != 'All':
                 df_export = df[df['Division'] == selected_division].copy()
                 gt = df[df['Division'] == 'Grand Total']
@@ -878,13 +688,54 @@ async def export_to_excel(request: Request):
             
             ws1 = wb.create_sheet("Summary")
             style_worksheet(ws1, df_export, header_fill, header_font, border)
+            
+            # Sheet 2 & 3: Claimed & Not Claimed
+            if source_df is not None:
+                def is_arbitration(value):
+                    if pd.isna(value): return False
+                    value = str(value).strip().upper()
+                    return value.startswith('ARB') and value != 'NAN' and value != ''
+                
+                dealer_mapping = {
+                    'AMT': 'AMRAVATI', 'CHA': 'CHAUFULA_SZZ', 'CHI': 'CHIKHALI',
+                    'KOL': 'KOLHAPUR_WS', 'HO': 'NAGPUR_KAMPTHEE ROAD',
+                    'CITY': 'NAGPUR_WARDHAMAN NGR', 'SHI': 'SHIKRAPUR_SZS',
+                    'WAG': 'WAGHOLI', 'YAT': 'YAVATMAL', 'CQ': 'NAGPUR_WARDHAMAN NGR_CQ'
+                }
+                
+                if selected_division != 'All':
+                    dealer_location = dealer_mapping.get(selected_division)
+                    filtered_source = source_df[source_df['Dealer Location'] == dealer_location].copy() if dealer_location else source_df.copy()
+                else:
+                    filtered_source = source_df.copy()
+                
+                # Claimed
+                claimed_df = filtered_source[filtered_source['Claim arbitration ID'].apply(is_arbitration)][
+                    ['Fiscal Month', 'Dealer Location', 'Debit Note Amount', 'Claim arbitration ID']
+                ].copy()
+                
+                if not claimed_df.empty:
+                    ws2 = wb.create_sheet("Arbitration Claimed")
+                    style_worksheet(ws2, claimed_df, header_fill, header_font, border)
+                
+                # Not Claimed
+                not_claimed_df = filtered_source[~filtered_source['Claim arbitration ID'].apply(is_arbitration)][
+                    ['Fiscal Month', 'Dealer Location', 'Debit Note Amount']
+                ].copy()
+                
+                if not not_claimed_df.empty:
+                    ws3 = wb.create_sheet("Arbitration Not Claimed")
+                    style_worksheet(ws3, not_claimed_df, header_fill, header_font, border)
         
-        # ===================== CURRENT MONTH EXPORT =====================
+        # ============ CURRENT MONTH (3 SHEETS) ============
         elif export_type == 'currentmonth':
             df = WARRANTY_DATA['current_month_df']
+            source_df = WARRANTY_DATA['current_month_source_df']
+            
             if df is None or df.empty:
                 raise HTTPException(status_code=500, detail="No data")
             
+            # Sheet 1: Summary
             if selected_division != 'All':
                 df_export = df[df['Division'] == selected_division].copy()
                 gt = df[df['Division'] == 'Grand Total']
@@ -895,11 +746,28 @@ async def export_to_excel(request: Request):
             
             ws1 = wb.create_sheet("Summary")
             style_worksheet(ws1, df_export, header_fill, header_font, border)
-        
-        # ===================== COMPENSATION EXPORT WITH TAT =====================
-        elif export_type == 'compensation':
-            print(f"✓ Creating Compensation Claim export...")
             
+            # Sheet 2 & 3: Details
+            if source_df is not None:
+                if selected_division != 'All':
+                    spares_df = source_df[(source_df['Division'] == selected_division) & 
+                                         (source_df['Pending Claims Spares'].notna())].copy()
+                    labour_df = source_df[(source_df['Division'] == selected_division) & 
+                                         (source_df['Pending Claims Labour'].notna())].copy()
+                else:
+                    spares_df = source_df[source_df['Pending Claims Spares'].notna()].copy()
+                    labour_df = source_df[source_df['Pending Claims Labour'].notna()].copy()
+                
+                if not spares_df.empty:
+                    ws2 = wb.create_sheet("Spares Claimed Details")
+                    style_worksheet(ws2, spares_df, header_fill, header_font, border)
+                
+                if not labour_df.empty:
+                    ws3 = wb.create_sheet("Labour Claimed Details")
+                    style_worksheet(ws3, labour_df, header_fill, header_font, border)
+        
+        # ============ COMPENSATION (TAT FROM RO BILL DATE) ============
+        elif export_type == 'compensation':
             summary_df = WARRANTY_DATA['compensation_df']
             source_df = WARRANTY_DATA['compensation_source_df']
             
@@ -917,9 +785,8 @@ async def export_to_excel(request: Request):
             
             ws_summary = wb.create_sheet("Summary")
             style_worksheet(ws_summary, summary_export, header_fill, header_font, border)
-            print(f"  ✓ Summary Sheet created")
             
-            # Sheet 2: Details with TAT
+            # Sheet 2: Details with TAT (RO BILL DATE TO CURRENT DATE)
             if source_df is not None and not source_df.empty:
                 if selected_division != 'All':
                     detail_df = source_df[source_df['Division'] == selected_division].copy()
@@ -927,9 +794,6 @@ async def export_to_excel(request: Request):
                     detail_df = source_df.copy()
                 
                 if not detail_df.empty:
-                    print(f"✓ Creating Details Sheet with TAT...")
-                    
-                    # Define columns in order
                     required_cols = [
                         'Division', 'RO Id.', 'Registration No.', 'Chassis No.', 'Model Group',
                         'RO Date', 'RO Bill Date', 'Claim Amount', 'Claim Date',
@@ -940,22 +804,23 @@ async def export_to_excel(request: Request):
                     available_cols = [col for col in required_cols if col in detail_df.columns]
                     detail_df = detail_df[available_cols].copy()
                     
-                    # ===== CALCULATE TAT =====
-                    if 'Request Date' in detail_df.columns:
-                        def calculate_tat(request_date):
+                    # REPLACE "No. of Days" with TAT from RO BILL DATE
+                    if 'RO Bill Date' in detail_df.columns:
+                        def calculate_tat_from_bill(bill_date):
                             try:
-                                if pd.isna(request_date):
+                                if pd.isna(bill_date):
                                     return 0
-                                req_date = pd.to_datetime(request_date, errors='coerce')
-                                if pd.isna(req_date):
+                                bill_dt = pd.to_datetime(bill_date, errors='coerce')
+                                if pd.isna(bill_dt):
                                     return 0
-                                tat_days = (datetime.now().date() - req_date.date()).days
-                                return max(0, tat_days)
+                                tat = (datetime.now().date() - bill_dt.date()).days
+                                return max(0, tat)
                             except:
                                 return 0
                         
-                        detail_df['TAT (Days)'] = detail_df['Request Date'].apply(calculate_tat)
-                        print(f"  ✓ TAT calculated")
+                        # Replace "No. of Days" column with TAT
+                        if 'No. of Days' in detail_df.columns:
+                            detail_df['No. of Days'] = detail_df['RO Bill Date'].apply(calculate_tat_from_bill)
                     
                     # Convert dates
                     date_columns = ['RO Date', 'RO Bill Date', 'Claim Date', 'Request Date']
@@ -963,20 +828,22 @@ async def export_to_excel(request: Request):
                         if col in detail_df.columns:
                             detail_df[col] = pd.to_datetime(detail_df[col], errors='coerce')
                     
-                    # Sort by Request Date
+                    # Sort
                     if 'Request Date' in detail_df.columns:
                         detail_df = detail_df.sort_values('Request Date', ascending=False, na_position='last')
                     
-                    ws_details = wb.create_sheet("Details with TAT")
+                    ws_details = wb.create_sheet("Details")
                     style_worksheet(ws_details, detail_df, header_fill, header_font, border)
-                    print(f"  ✓ Details Sheet created with {len(detail_df)} rows")
         
-        # ===================== PR APPROVAL EXPORT =====================
+        # ============ PR APPROVAL (SUMMARY + DETAILS) ============
         elif export_type == 'pr_approval':
             df = WARRANTY_DATA['pr_approval_df']
+            source_df = WARRANTY_DATA['pr_approval_source_df']
+            
             if df is None or df.empty:
                 raise HTTPException(status_code=500, detail="No data")
             
+            # Sheet 1: Summary
             if selected_division != 'All':
                 df_export = df[df['Division'] == selected_division].copy()
                 gt = df[df['Division'] == 'Grand Total']
@@ -987,6 +854,17 @@ async def export_to_excel(request: Request):
             
             ws1 = wb.create_sheet("Summary")
             style_worksheet(ws1, df_export, header_fill, header_font, border)
+            
+            # Sheet 2: Details (ALL COLUMNS FROM YOUR OLD CODE)
+            if source_df is not None and not source_df.empty:
+                if selected_division != 'All':
+                    detail_df = source_df[source_df['Division'] == selected_division].copy()
+                else:
+                    detail_df = source_df.copy()
+                
+                if not detail_df.empty:
+                    ws2 = wb.create_sheet("Details")
+                    style_worksheet(ws2, detail_df, header_fill, header_font, border)
         
         # Save
         output = io.BytesIO()
@@ -994,8 +872,7 @@ async def export_to_excel(request: Request):
         output.seek(0)
         
         filename = f"{selected_division}_{export_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        
-        print(f"✅ File Ready: {filename}\n")
+        print(f" Export ready: {filename}\n")
         
         return StreamingResponse(
             iter([output.getvalue()]),
@@ -1006,61 +883,43 @@ async def export_to_excel(request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f" Error: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/")
 async def root():
-    """Root route"""
     return HTMLResponse(content=DASHBOARD_HTML)
 
 # ==================== STARTUP ====================
 
 print("Processing warranty data...\n")
-print("1. Processing Warranty Debit data...")
+print("1. Processing Warranty Debit...")
 WARRANTY_DATA['credit_df'], WARRANTY_DATA['debit_df'], WARRANTY_DATA['arbitration_df'], WARRANTY_DATA['source_df'] = process_warranty_data()
 
-print("2. Processing Current Month Warranty data...")
+print("2. Processing Current Month...")
 WARRANTY_DATA['current_month_df'], WARRANTY_DATA['current_month_source_df'] = process_current_month_warranty()
 
-print("3. Processing Compensation Claim data...")
+print("3. Processing Compensation...")
 WARRANTY_DATA['compensation_df'], WARRANTY_DATA['compensation_source_df'] = process_compensation_claim()
 
-print("4. Processing PR Approval data...")
+print("4. Processing PR Approval...")
 WARRANTY_DATA['pr_approval_df'], WARRANTY_DATA['pr_approval_source_df'] = process_pr_approval()
 
 if __name__ == "__main__":
     port = int(os.getenv('PORT', 8001))
     
     print("\n" + "="*100)
-    print("✅ SERVER READY - WARRANTY MANAGEMENT SYSTEM")
+    print(" READY - WARRANTY MANAGEMENT SYSTEM")
     print("="*100)
-    print(f"Port: {port}")
-    print(f"Access URL: http://localhost:{port}")
-    print(f"\nExcel Export (Multi-Sheet):")
-    print(f"  • Credit: Summary + Source Data (2 sheets)")
-    print(f"  • Debit: Summary + Source Data (2 sheets)")
-    print(f"  • Arbitration: Summary (1 sheet)")
-    print(f"  • Current Month: Summary + Details (2 sheets)")
-    print(f"  • Compensation: Summary + Details with TAT (2 sheets)")
-    print(f"  • PR Approval: Summary + Details (2 sheets)")
-    print(f"\nCompensation Claim Details (15 Columns):")
-    print(f"  1. Division")
-    print(f"  2. RO Id.")
-    print(f"  3. Registration No.")
-    print(f"  4. Chassis No.")
-    print(f"  5. Model Group")
-    print(f"  6. RO Date (MM-DD-YYYY)")
-    print(f"  7. RO Bill Date (MM-DD-YYYY)")
-    print(f"  8. Claim Amount (#,##0.00)")
-    print(f"  9. Claim Date (MM-DD-YYYY)")
-    print(f"  10. Request No.")
-    print(f"  11. Request Date (MM-DD-YYYY)")
-    print(f"  12. Request Status")
-    print(f"  13. Claim Approved Amt. (#,##0.00)")
-    print(f"  14. No. of Days")
-    print(f"  15. TAT (Days) = Current Date - Request Date")
+    print(f"Access: http://localhost:{port}")
+    print("\nEXPORT OPTIONS (CORRECTED LABELS):")
+    print("   Credit (no '2 sheets')")
+    print("   Debit (no '2 sheets')")
+    print("   Arbitration (3 sheets: Summary + Claimed + Not Claimed)")
+    print("   Current Month (3 sheets: Summary + Spares Details + Labour Details)")
+    print("   Compensation (TAT from RO Bill Date)")
+    print("   PR Approval (Summary + Details)")
     print("="*100 + "\n")
     
     uvicorn.run(app, host="0.0.0.0", port=port)
