@@ -2,8 +2,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import uvicorn
-from fastapi import FastAPI, Request, HTTPException, Cookie
-from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse, JSONResponse, StreamingResponse
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 import os
 import socket
 from typing import Optional
@@ -28,7 +28,7 @@ IS_RENDER = os.getenv('RENDER', 'false').lower() == 'true'
 DATA_DIR = os.getenv('DATA_DIR', '/mnt/data' if IS_RENDER else '.')
 
 print(f"\n{'='*100}")
-print(f"WARRANTY MANAGEMENT SYSTEM - COMPLETE PRODUCTION VERSION")
+print(f"WARRANTY MANAGEMENT SYSTEM - NO LOGIN (DIRECT DASHBOARD)")
 print(f"{'='*100}")
 print(f"Environment: {'Render.com' if IS_RENDER else 'Local'}")
 print(f"Data Directory: {DATA_DIR}")
@@ -401,314 +401,6 @@ def process_pr_approval():
         traceback.print_exc()
         return None, None
 
-# ==================== AUTHENTICATION ====================
-
-def load_user_credentials():
-    """Load user credentials from UserID.xlsx"""
-    try:
-        user_file = os.path.join(DATA_DIR, "UserID.xlsx")
-        
-        if not os.path.exists(user_file):
-            print(f"  User file not found: {user_file}")
-            return {}
-        
-        df = pd.read_excel(user_file)
-        credentials = {}
-        for idx, row in df.iterrows():
-            try:
-                if 'User ID' in df.columns and 'Password' in df.columns:
-                    uid = row['User ID']
-                    pwd = row['Password']
-                    if pd.notna(uid) and pd.notna(pwd):
-                        user_id = str(int(float(uid)))
-                        password = str(pwd).strip()
-                        credentials[user_id] = password
-            except:
-                continue
-        
-        print(f"  ✓ Loaded {len(credentials)} user credentials")
-        return credentials
-    except Exception as e:
-        print(f"  ✗ Error loading credentials: {e}")
-        return {}
-
-USER_CREDENTIALS = load_user_credentials()
-SESSIONS = {}
-
-class CaptchaGenerator:
-    """Generate CAPTCHA images for login"""
-    
-    @staticmethod
-    def generate_captcha(length=6):
-        allowed_chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ123456789'
-        captcha_text = ''.join(secrets.choice(allowed_chars) for _ in range(length))
-        
-        width, height = 500, 150
-        image = Image.new('RGB', (width, height), color='white')
-        draw = ImageDraw.Draw(image)
-        
-        # Add noise lines
-        for _ in range(5):
-            x1, y1 = secrets.randbelow(width), secrets.randbelow(height)
-            x2, y2 = secrets.randbelow(width), secrets.randbelow(height)
-            draw.line((x1, y1, x2, y2), fill='lightgray', width=1)
-        
-        # Load font
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 80)
-        except:
-            try:
-                font = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 80)
-            except:
-                font = ImageFont.load_default()
-        
-        # Draw characters
-        for i, char in enumerate(captcha_text):
-            y_offset = np.random.randint(15, 50)
-            draw.text((15 + i * 70, y_offset), char, fill='#FF8C00', font=font)
-        
-        # Add noise dots
-        for _ in range(50):
-            x, y = secrets.randbelow(width), secrets.randbelow(height)
-            draw.point((x, y), fill='#FFD699')
-        
-        # Convert to base64
-        img_io = io.BytesIO()
-        image.save(img_io, 'PNG')
-        img_io.seek(0)
-        img_base64 = base64.b64encode(img_io.getvalue()).decode()
-        
-        return captcha_text, f"data:image/png;base64,{img_base64}"
-
-def create_session(user_id):
-    """Create new session for authenticated user"""
-    session_id = secrets.token_hex(16)
-    SESSIONS[session_id] = {
-        'user_id': user_id,
-        'created_at': datetime.now(),
-        'last_activity': datetime.now()
-    }
-    return session_id
-
-def verify_session(session_id):
-    """Verify if session is valid (max 8 hours)"""
-    if session_id not in SESSIONS:
-        return None
-    
-    session = SESSIONS[session_id]
-    if (datetime.now() - session['last_activity']).total_seconds() > 8 * 3600:
-        del SESSIONS[session_id]
-        return None
-    
-    session['last_activity'] = datetime.now()
-    return session['user_id']
-
-# ==================== LOGIN PAGE HTML ====================
-
-LOGIN_PAGE = """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#FF8C00">
-<title>Warranty Management - Login</title>
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-body { 
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-    background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); 
-    min-height: 100vh; 
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
-    padding: 10px;
-}
-
-.login-wrapper { 
-    background: white; 
-    border-radius: 20px; 
-    box-shadow: 0 20px 60px rgba(0,0,0,0.3); 
-    overflow: hidden; 
-    width: 100%; 
-    max-width: 1000px;
-    display: grid; 
-    grid-template-columns: 1fr 1fr;
-}
-
-.login-left { 
-    padding: 40px 30px; 
-    display: flex; 
-    flex-direction: column; 
-    justify-content: center; 
-}
-
-.login-right { 
-    background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); 
-    padding: 40px 30px; 
-    display: flex; 
-    flex-direction: column; 
-    justify-content: center; 
-    align-items: center; 
-    color: white; 
-    text-align: center; 
-}
-
-h1 { font-size: 24px; color: #333; margin-bottom: 10px; font-weight: 700; }
-p { color: #666; font-size: 14px; margin-bottom: 5px; }
-
-.form-group { margin-bottom: 20px; }
-.form-group label { display: block; font-weight: 600; color: #333; margin-bottom: 8px; font-size: 13px; }
-.form-group input { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; transition: all 0.3s; }
-.form-group input:focus { outline: none; border-color: #FF8C00; box-shadow: 0 0 8px rgba(255,140,0,0.2); }
-
-.captcha-section { margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 8px; }
-.captcha-image { width: 100%; height: auto; margin-bottom: 10px; border-radius: 4px; }
-.captcha-section input { margin-top: 10px; }
-
-.login-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #FF8C00 0%, #FF6B35 100%); color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; margin-top: 15px; transition: all 0.3s; font-size: 14px; }
-.login-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(255,140,0,0.3); }
-.login-btn:active { transform: translateY(0); }
-
-.error-message { color: #c62828; font-size: 12px; margin-top: 10px; display: none; padding: 10px; background: #ffebee; border-radius: 4px; border-left: 4px solid #c62828; }
-.error-message.show { display: block; }
-
-.right-content h2 { font-size: 28px; margin-bottom: 20px; font-weight: 700; }
-.right-content p { font-size: 14px; line-height: 1.6; }
-
-/* TABLET BREAKPOINT (768px and below) */
-@media (max-width: 768px) {
-    .login-wrapper { grid-template-columns: 1fr; max-width: 100%; border-radius: 0; height: 100vh; }
-    .login-left { padding: 30px 20px; }
-    .login-right { padding: 30px 20px; }
-    h1 { font-size: 20px; }
-    p { font-size: 13px; }
-    .form-group { margin-bottom: 15px; }
-    .form-group label { font-size: 12px; margin-bottom: 6px; }
-    .form-group input { padding: 10px; font-size: 13px; }
-    .login-btn { padding: 10px; font-size: 13px; margin-top: 12px; }
-    .captcha-section { padding: 12px; margin: 15px 0; }
-    .right-content h2 { font-size: 22px; }
-    .right-content p { font-size: 12px; }
-}
-
-/* MOBILE BREAKPOINT (480px and below) */
-@media (max-width: 480px) {
-    body { padding: 5px; }
-    .login-wrapper { height: 100vh; }
-    .login-left { padding: 20px 15px; }
-    .login-right { padding: 20px 15px; }
-    h1 { font-size: 16px; margin-bottom: 6px; }
-    p { font-size: 11px; margin-bottom: 3px; }
-    .form-group { margin-bottom: 12px; }
-    .form-group label { font-size: 11px; margin-bottom: 4px; }
-    .form-group input { padding: 9px; font-size: 12px; }
-    .login-btn { padding: 8px; font-size: 12px; margin-top: 10px; }
-    .error-message { font-size: 10px; padding: 7px; }
-    .captcha-image { margin-bottom: 8px; }
-    .captcha-section { padding: 10px; margin: 12px 0; }
-    .right-content h2 { font-size: 16px; margin-bottom: 12px; }
-    .right-content p { font-size: 11px; line-height: 1.4; }
-}
-</style>
-</head>
-<body>
-<div class="login-wrapper">
-<div class="login-left">
-<h1>Warranty Management</h1>
-<p>Mahindra All Division Warranty Overview</p>
-<form onsubmit="handleLogin(event)">
-<div class="form-group">
-<label>User ID</label>
-<input type="text" id="userId" placeholder="Enter User ID" required autocomplete="off">
-</div>
-<div class="form-group">
-<label>Password</label>
-<input type="password" id="password" placeholder="Enter Password" required autocomplete="off">
-</div>
-<div class="captcha-section">
-<img id="captchaImage" class="captcha-image" src="" alt="CAPTCHA" style="border: 1px solid #ddd;">
-<input type="text" id="captchaInput" placeholder="Enter CAPTCHA" required style="width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 4px; font-size: 13px;">
-</div>
-<div class="error-message" id="errorMessage"></div>
-<button type="submit" class="login-btn">Login</button>
-</form>
-</div>
-<div class="login-right">
-<div class="right-content">
-<h2>Welcome</h2>
-<p>Warranty Management System</p>
-<p style="margin-top: 30px; font-size: 12px;">Unnati Motors</p>
-</div>
-</div>
-</div>
-
-<script>
-let currentCaptcha = '';
-
-async function loadCaptcha() {
-    try {
-        const response = await fetch('/api/captcha');
-        const data = await response.json();
-        currentCaptcha = data.captcha;
-        document.getElementById('captchaImage').src = data.image;
-    } catch (error) {
-        console.error('Error loading CAPTCHA:', error);
-    }
-}
-
-async function handleLogin(event) {
-    event.preventDefault();
-    const userId = document.getElementById('userId').value.trim();
-    const password = document.getElementById('password').value;
-    const captchaInput = document.getElementById('captchaInput').value.trim();
-    const errorDiv = document.getElementById('errorMessage');
-    
-    errorDiv.classList.remove('show');
-    
-    if (!userId || !password || !captchaInput) {
-        errorDiv.textContent = ' All fields are required';
-        errorDiv.classList.add('show');
-        return;
-    }
-    
-    if (captchaInput.toUpperCase() !== currentCaptcha) {
-        errorDiv.textContent = ' CAPTCHA is incorrect';
-        errorDiv.classList.add('show');
-        loadCaptcha();
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/login', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({user_id: userId, password: password})
-        });
-        
-        if (response.ok) {
-            window.location.href = '/dashboard';
-        } else {
-            const error = await response.json();
-            errorDiv.textContent = ' ' + (error.detail || 'Login failed');
-            errorDiv.classList.add('show');
-            loadCaptcha();
-            document.getElementById('password').value = '';
-            document.getElementById('captchaInput').value = '';
-        }
-    } catch (error) {
-        errorDiv.textContent = ' Error: ' + error.message;
-        errorDiv.classList.add('show');
-    }
-}
-
-window.onload = loadCaptcha;
-</script>
-</body>
-</html>"""
-
 # ==================== DASHBOARD PAGE HTML ====================
 
 DASHBOARD_HTML = """<!DOCTYPE html>
@@ -944,7 +636,7 @@ body {
 
 .error-msg.show { display: block; }
 
-/* DESKTOP (1400px+) - NO CHANGES NEEDED */
+/* DESKTOP (1400px+) */
 
 /* TABLET BREAKPOINT (768px and below) */
 @media (max-width: 768px) {
@@ -1096,11 +788,6 @@ async function loadDashboard() {
     try {
         const response = await fetch('/api/warranty-data', {credentials: 'include'});
         
-        if (response.status === 401) {
-            window.location.href = '/login-page';
-            return;
-        }
-        
         if (!response.ok) throw new Error('Failed to load data');
         
         warrantyData = await response.json();
@@ -1240,36 +927,6 @@ app = FastAPI()
 
 # ==================== API ENDPOINTS ====================
 
-@app.get("/api/captcha")
-async def get_captcha():
-    """Generate CAPTCHA for login"""
-    captcha_text, captcha_image = CaptchaGenerator.generate_captcha()
-    return {"captcha": captcha_text, "image": captcha_image}
-
-@app.post("/api/login")
-async def api_login(request: Request):
-    """Authenticate user and create session"""
-    try:
-        body = await request.json()
-        user_id = body.get('user_id', '').strip()
-        password = body.get('password', '')
-        
-        if not user_id or user_id not in USER_CREDENTIALS:
-            raise HTTPException(status_code=401, detail="Invalid User ID")
-        
-        if USER_CREDENTIALS[user_id] != password:
-            raise HTTPException(status_code=401, detail="Invalid Password")
-        
-        session_id = create_session(user_id)
-        response = JSONResponse({"success": True}, status_code=200)
-        response.set_cookie(key="session_id", value=session_id, httponly=True, max_age=28800, samesite="lax", path="/")
-        return response
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Login error: {e}")
-        raise HTTPException(status_code=400, detail="Login error")
-
 @app.get("/api/warranty-data")
 async def get_warranty_data():
     """Get all warranty data for dashboard"""
@@ -1401,19 +1058,14 @@ async def export_to_excel(request: Request):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Export error: {str(e)}")
 
-@app.get("/login-page")
-async def login_page():
-    """Serve login page"""
-    return HTMLResponse(content=LOGIN_PAGE)
+@app.get("/")
+async def root():
+    """Root route - direct dashboard access"""
+    return HTMLResponse(content=DASHBOARD_HTML)
 
 @app.get("/dashboard")
 async def dashboard():
     """Serve dashboard"""
-    return HTMLResponse(content=DASHBOARD_HTML)
-
-@app.get("/")
-async def root():
-    """Root route"""
     return HTMLResponse(content=DASHBOARD_HTML)
 
 # ==================== STARTUP ====================
@@ -1435,19 +1087,16 @@ if __name__ == "__main__":
     port = int(os.getenv('PORT', 8001))
     
     print("\n" + "="*100)
-    print("✅ SERVER READY - WARRANTY MANAGEMENT SYSTEM")
+    print("SERVER READY - WARRANTY MANAGEMENT SYSTEM (NO LOGIN)")
     print("="*100)
     print(f"Port: {port}")
-    print(f"Login URL: http://localhost:{port}/login-page")
-    print(f"\nTest Credentials:")
-    print(f"  User ID: 11724")
-    print(f"  Password: un001@123")
-    print("\nFeatures:")
+    print(f"Direct Access URL: http://localhost:{port}")
+    print(f"\nFeatures:")
     print(f"  ✓ 6 Warranty Tabs (Credit, Debit, Arbitration, Current Month, Compensation, PR Approval)")
     print(f"  ✓ Desktop & Mobile Responsive Design")
     print(f"  ✓ Professional Orange Theme (#FF8C00)")
     print(f"  ✓ Complete Excel Export")
-    print(f"  ✓ CAPTCHA & Session Authentication (8 hours)")
+    print(f"  ✓ NO LOGIN - Direct Dashboard Access")
     print(f"  ✓ All Error Handling & Conditions")
     print("="*100 + "\n")
     
