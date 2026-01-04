@@ -98,7 +98,7 @@ def process_warranty_data():
         df['Claim arbitration ID'] = df['Claim arbitration ID'].astype(str).replace('nan', '').replace('', np.nan)
 
         dealers = sorted(df['Dealer_Code'].unique())
-        months = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        months = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan']
 
         # CREDIT
         credit_df = pd.DataFrame({'Division': dealers})
